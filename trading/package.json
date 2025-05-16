@@ -1,0 +1,13 @@
+{
+  "name": "uniswap-trader",
+  "version": "1.0.0",
+  "description": "Uniswap trading bot for Sepolia testnet",
+  "main": "uniswap_trader.js",
+  "scripts": {
+    "start": "node uniswap_trader.js"
+  },
+  "dependencies": {
+    "ethers": "^6.11.1",
+    "dotenv": "^16.4.5"
+  }
+} 
