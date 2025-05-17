@@ -193,7 +193,7 @@ const Message = ({ text, isUser, timestamp, isError, isTyping }) => {
             </div>
           )}
         </div>
-        <div className={`text-xs mt-1 flex items-center ${isUser ? 'text-white/70 justify-end' : 'text-gray-400'}`}>
+        <div className={`text-xs mt-1 flex items-center ${isUser ? 'text-gray-800/70 justify-end' : 'text-gray-400'}`}>
           {timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
         </div>
       </div>
