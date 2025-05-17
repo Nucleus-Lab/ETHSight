@@ -162,9 +162,13 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                 file_path=args["file_path"],
                 output_png_path=output_path
             )
+            signal_list = visualizer.identify_signal(args["query"], args["file_path"])
             return {
                 "tool_name": tool_name,
-                "result": result
+                "result": {
+                    "visualization_result": result,
+                    "signal_list": signal_list
+                }
             }
         elif tool_name == "process_data":
             # Process data using DataProcessor
@@ -230,16 +234,15 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
             "result": f"Error executing tool: {str(e)}"
         }
 
-def process_with_claude(user_message: str, max_turns: int = 5) -> List[Dict[str, Any]]:
+def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: int = 5) -> List[Dict[str, Any]]:
     """
     Process user message with Claude API using defined tools
     
     Returns:
         List[Dict[str, Any]]: List of conversation messages including tool calls and results
     """
-    messages = [{"role": "user", "content": user_message}]
+    messages = conversation_history
     current_turn = 0
-    conversation_history = []
     
     while current_turn < max_turns:
         print(f"\nTurn {current_turn + 1}:")
