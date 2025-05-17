@@ -257,7 +257,7 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
                 model=get_model_config(ModelConfig.SONNET)["model_name"],
                 max_tokens=1024,
                 messages=conversation_history,  # Use full history
-                system=controller_system_prompt,
+                system=controller_system_prompt + f'\n\nCurrent time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
                 tools=tools
             )
             

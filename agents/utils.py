@@ -160,6 +160,7 @@ class CMCAPI:
             
             # Print the final DataFrame structure
             print("\nFinal DataFrame structure:")
+            import pdb; pdb.set_trace()
             print(df.head())
             
             return df
