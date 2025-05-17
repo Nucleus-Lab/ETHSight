@@ -7,7 +7,7 @@ import pandas as pd
 import json
 import uuid
 from pathlib import Path
-from agents.prompt import TABLE_CONTEXT
+from agents.prompt import GRAPHQL_RULES
 
 
 class GraphQLQuery(dspy.Signature):
@@ -105,12 +105,13 @@ class BitqueryDataRetriever():
         
         return [self._flatten_dict(data)]
     
-    def convert_to_csv(self, data: dict):
+    def convert_to_csv(self, data: dict, output_file: str):
         """
         Convert nested Bitquery data to CSV format
         
         Args:
             data (dict): Raw data from Bitquery API
+            output_file (str): Path to save the CSV file
             
         Returns:
             pd.DataFrame: DataFrame containing the flattened data
@@ -125,11 +126,6 @@ class BitqueryDataRetriever():
             
             # Convert to DataFrame
             df = pd.DataFrame(flattened_data)
-            
-            # Generate unique filename with UUID
-            file_id = str(uuid.uuid4())
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = self.data_dir / f"bitquery_data_{timestamp}_{file_id}.csv"
             
             # Save to CSV
             df.to_csv(output_file, index=False)
@@ -150,13 +146,24 @@ class BitqueryDataRetriever():
             graphql_query = self.generate_query(
                 query=query,
                 current_time=current_time,
-                table_context=TABLE_CONTEXT
+                table_context=GRAPHQL_RULES
             ).graphql_query
         
         print(graphql_query)
         data = self.BitqueryAPI.request(query=graphql_query)
         if data:
-            return self.convert_to_csv(data)
+            # Generate unique filename with UUID
+            file_id = str(uuid.uuid4())
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_path = str(self.data_dir / f"bitquery_data_{timestamp}_{file_id}.csv")
+            
+            df = self.convert_to_csv(data, file_path)
+            if df is not None:
+                return {
+                    "file_path": file_path,
+                    "df_head": df.head().to_string(),
+                    "description": "Data retrieved from Bitquery"
+                }
         return None
     
 
