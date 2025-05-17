@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import DatePicker from 'react-datepicker';
+import { Switch } from '@headlessui/react';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getAllSignalsForUser } from '../../services/api';
+import { getAllSignalsForUser, runBacktest, executeTrade } from '../../services/api';
 
 const StrategyForm = ({ onSubmit }) => {
   const { authenticated, user } = usePrivy();
@@ -10,6 +11,9 @@ const StrategyForm = ({ onSubmit }) => {
   const [signals, setSignals] = useState([]);
   const [loadingSignals, setLoadingSignals] = useState(false);
   const [signalError, setSignalError] = useState(null);
+  
+  // Mode toggle (backtest or trade)
+  const [isTradeMode, setIsTradeMode] = useState(false);
   
   // Form state
   const [filterSignal, setFilterSignal] = useState('');
@@ -82,10 +86,10 @@ const StrategyForm = ({ onSubmit }) => {
     return `Signal #${signal.signal_id}`;
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!authenticated) {
+    if (!authenticated || !user?.wallet?.address) {
       return;
     }
     
@@ -111,19 +115,59 @@ const StrategyForm = ({ onSubmit }) => {
       }
     };
     
-    console.log('Strategy to backtest:', strategy);
+    console.log(`Strategy to ${isTradeMode ? 'trade' : 'backtest'}:`, strategy);
     
-    // In a real implementation, we would call the onSubmit prop with the strategy
-    if (onSubmit) {
-      onSubmit(strategy);
+    try {
+      let result;
+      
+      if (isTradeMode) {
+        // Execute real trade
+        result = await executeTrade(strategy);
+      } else {
+        // Run backtest
+        result = await runBacktest(strategy);
+      }
+      
+      // Call the onSubmit prop with the results
+      if (onSubmit) {
+        onSubmit(result);
+      }
+    } catch (error) {
+      console.error(`Error during ${isTradeMode ? 'trade' : 'backtest'}:`, error);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
   
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">Backtest Strategy</h2>
+      {/* Mode Toggle */}
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-gray-800">
+          {isTradeMode ? "Execute Trade" : "Backtest"}
+        </h2>
+        <div className="flex items-center">
+          <span className={`mr-2 text-sm ${!isTradeMode ? 'font-medium text-gray-700' : 'text-gray-500'}`}>
+            Backtest
+          </span>
+          <Switch
+            checked={isTradeMode}
+            onChange={setIsTradeMode}
+            className={`${
+              isTradeMode ? 'bg-primary-main' : 'bg-gray-300'
+            } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-main focus:ring-offset-2`}
+          >
+            <span
+              className={`${
+                isTradeMode ? 'translate-x-6' : 'translate-x-1'
+              } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+            />
+          </Switch>
+          <span className={`ml-2 text-sm ${isTradeMode ? 'font-medium text-gray-700' : 'text-gray-500'}`}>
+            Trade
+          </span>
+        </div>
+      </div>
       
       {loadingSignals && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-md text-sm flex items-center">
@@ -144,6 +188,13 @@ const StrategyForm = ({ onSubmit }) => {
       {!loadingSignals && signals.length === 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md text-sm">
           No signals found. Please create signals in the Analytics page first.
+        </div>
+      )}
+      
+      {isTradeMode && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
+          <div className="font-semibold mb-1">Warning: Trade mode</div>
+          <div>You are about to execute real trades. This will use actual funds from your wallet.</div>
         </div>
       )}
       
@@ -297,51 +348,62 @@ const StrategyForm = ({ onSubmit }) => {
           </div>
         </div>
         
-        {/* Time Range */}
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">
-            Backtest Time Range
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Start Date</label>
-              <DatePicker
-                selected={startDate}
-                onChange={date => setStartDate(date)}
-                selectsStart
-                startDate={startDate}
-                endDate={endDate}
-                maxDate={endDate}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
-                disabled={signals.length === 0}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">End Date</label>
-              <DatePicker
-                selected={endDate}
-                onChange={date => setEndDate(date)}
-                selectsEnd
-                startDate={startDate}
-                endDate={endDate}
-                minDate={startDate}
-                maxDate={new Date()}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
-                disabled={signals.length === 0}
-              />
+        {/* Time Range - Only show for backtest mode */}
+        {!isTradeMode && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Backtest Time Range
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Start Date</label>
+                <DatePicker
+                  selected={startDate}
+                  onChange={date => setStartDate(date)}
+                  selectsStart
+                  startDate={startDate}
+                  endDate={endDate}
+                  maxDate={endDate}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
+                  disabled={signals.length === 0}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">End Date</label>
+                <DatePicker
+                  selected={endDate}
+                  onChange={date => setEndDate(date)}
+                  selectsEnd
+                  startDate={startDate}
+                  endDate={endDate}
+                  minDate={startDate}
+                  maxDate={new Date()}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
+                  disabled={signals.length === 0}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
         
         {/* Submit Button */}
         <div>
           <button
             type="submit"
             disabled={loading || !authenticated || signals.length === 0 || loadingSignals}
-            className="w-full py-3 px-4 bg-primary-main text-black font-medium rounded-md hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-main disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className={`w-full py-3 px-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-main disabled:bg-gray-300 disabled:cursor-not-allowed ${
+              isTradeMode 
+                ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500' 
+                : 'bg-primary-main hover:bg-primary-hover text-black focus:ring-primary-main'
+            }`}
           >
-            {loading ? 'Running Backtest...' : loadingSignals ? 'Loading Signals...' : 'Run Backtest'}
+            {loading 
+              ? (isTradeMode ? 'Executing Trade...' : 'Running Backtest...') 
+              : loadingSignals 
+                ? 'Loading Signals...' 
+                : (isTradeMode ? 'Execute Trade' : 'Run Backtest')
+            }
           </button>
         </div>
       </form>

@@ -12,6 +12,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@headlessui/react": "^1.7.15",
     "@heroicons/react": "^2.0.18",
     "@privy-io/react-auth": "^1.0.0",
     "ethers": "^6.13.5",

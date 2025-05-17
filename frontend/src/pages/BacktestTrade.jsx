@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 function BacktestTrade() {
   const [activeTab, setActiveTab] = useState('results')
   const [activeStrategies, setActiveStrategies] = useState([])
+  const [lastResults, setLastResults] = useState(null) 
   
   // Log state changes for debugging
   useEffect(() => {
@@ -19,19 +20,31 @@ function BacktestTrade() {
 
   console.log('BacktestTrade - Active tab:', activeTab)
   
-  const handleStrategySubmit = (strategy) => {
-    console.log('Running backtest with strategy:', strategy);
+  const handleStrategySubmit = (result) => {
+    console.log('Received result:', result);
     
-    // In a real implementation, we would send this to the backend
-    // For now, just simulate adding a new strategy
-    const newStrategyId = Date.now();
-    setActiveStrategies(prev => [...prev, newStrategyId]);
-    
-    // Auto-switch to results tab
-    setActiveTab('results');
-    
-    // Show a notification
-    toast.success('Backtest started successfully!');
+    if (result.success) {
+      // Add the strategy ID to active strategies for display
+      if (result.strategy_id) {
+        setActiveStrategies(prev => [...prev, result.strategy_id]);
+      }
+      
+      // Store the last results
+      setLastResults(result);
+      
+      // Auto-switch to results tab
+      setActiveTab('results');
+      
+      // Show appropriate notification
+      if (result.strategy_id.startsWith('trade_')) {
+        toast.success('Trade executed successfully!');
+      } else {
+        toast.success('Backtest completed successfully!');
+      }
+    } else {
+      // Handle errors
+      toast.error(result.message || 'Operation failed. Please try again.');
+    }
   };
 
   return (
@@ -68,6 +81,7 @@ function BacktestTrade() {
                     setActiveTab={setActiveTab}
                     activeStrategies={activeStrategies}
                     setActiveStrategies={setActiveStrategies}
+                    lastResults={lastResults}
                   />
                 </div>
               </div>
