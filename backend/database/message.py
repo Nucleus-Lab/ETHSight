@@ -13,11 +13,12 @@ Base = declarative_base()
 
 
 # Database operations for message
-def create_message(db, canvas_id: int, user_id: int, text: str):
+def create_message(db, canvas_id: int, user_id: int, text: str, tool_results: str = ""):
     new_message = MessageDB(
         canvas_id=canvas_id,
         user_id=user_id,
         text=text,
+        tool_results=tool_results,
         created_at=datetime.utcnow()
     )
     db.add(new_message)

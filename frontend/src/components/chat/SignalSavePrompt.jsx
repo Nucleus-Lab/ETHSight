@@ -19,7 +19,8 @@ const SignalSavePrompt = ({ signal, onSaved }) => {
       const signalData = {
         canvas_id: currentCanvasId,
         wallet_address: user.wallet.address,
-        signal_definition: signal.signal_definition,
+        signal_name: signal.signal_name,
+        signal_description: signal.signal_description,
         temp_signal_id: signal.signal_id // Pass the temporary ID for reference if needed
       };
       
@@ -57,7 +58,10 @@ const SignalSavePrompt = ({ signal, onSaved }) => {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span>Trading signal detected. Would you like to save it?</span>
+        <div className="flex flex-col">
+          <span className="font-medium">{signal.signal_name}</span>
+          <span className="text-xs">{signal.signal_description}</span>
+        </div>
       </div>
       <button
         onClick={handleSaveSignal}
@@ -84,7 +88,8 @@ const SignalSavePrompt = ({ signal, onSaved }) => {
 SignalSavePrompt.propTypes = {
   signal: PropTypes.shape({
     signal_id: PropTypes.string.isRequired,
-    signal_definition: PropTypes.string.isRequired
+    signal_name: PropTypes.string.isRequired,
+    signal_description: PropTypes.string.isRequired
   }).isRequired,
   onSaved: PropTypes.func
 };

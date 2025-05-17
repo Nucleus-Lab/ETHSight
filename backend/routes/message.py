@@ -11,6 +11,7 @@ from backend.database.canvas import get_canvas, create_canvas
 from backend.database.visualization import create_visualization, get_visualization_by_id, update_visualization
 from backend.constants import AI_USER_ID
 from backend.database.message import create_message, get_messages_for_canvas, get_message_by_id
+from backend.database.signal import create_signal
 
 # from agents.main import main as agent_main
 from agents.controller import process_with_claude
@@ -33,7 +34,8 @@ class MessageResponse(BaseModel):
 
 class SignalData(BaseModel):
     signal_id: str
-    signal_definition: str
+    signal_name: str
+    signal_description: str
 
 class MessageResponseWithAIResponse(BaseModel):
     message_id: int
@@ -78,53 +80,65 @@ async def send_message(
         # Get conversation history for this canvas
         conversation_history = []
         previous_messages = get_messages_for_canvas(db, canvas.canvas_id)
+        print("previous_messages: ", previous_messages)
         for msg in previous_messages:
+            print('msg: ', msg)
             role = "assistant" if msg.user_id == AI_USER_ID else "user"
+            if msg.tool_results:
+                tool_use_msg = "\n\nThis is the results from the tool used to reply to this message: " + msg.tool_results
+            else:
+                tool_use_msg = ""
             conversation_history.append({
                 "role": role,
-                "content": msg.text
+                "content": msg.text + tool_use_msg,
             })
-        
+            
         # Create the message
         new_message = create_message(
             db,
             canvas_id=canvas.canvas_id,
             user_id=user.user_id,
-            text=message.text
-        )
+            text=message.text,
+            tool_results=""
+        ) 
         
         # Add current message to conversation history
         conversation_history.append({
             "role": "user",
-            "content": message.text
+            "content": message.text,
         })
         
         # Process mentioned visualization IDs if provided
-        mentioned_visualizations = []
-        if message.mentioned_visualization_ids and len(message.mentioned_visualization_ids) > 0:
-            print(f"Processing mentioned visualization IDs: {message.mentioned_visualization_ids}")
-            for viz_id in message.mentioned_visualization_ids:
-                visualization = get_visualization_by_id(db, viz_id)
-                if visualization:
-                    mentioned_visualizations.append({
-                        "visualization_id": visualization.visualization_id,
-                        "png_path": visualization.png_path,
-                        "json_data": visualization.json_data,
-                        "file_path": visualization.file_path
-                    })
-                    print(f"Found visualization with ID {viz_id}: {visualization.png_path}")
-                else:
-                    print(f"Visualization with ID {viz_id} not found")
+        # mentioned_visualizations = []
+        # if message.mentioned_visualization_ids and len(message.mentioned_visualization_ids) > 0:
+        #     print(f"Processing mentioned visualization IDs: {message.mentioned_visualization_ids}")
+        #     for viz_id in message.mentioned_visualization_ids:
+        #         visualization = get_visualization_by_id(db, viz_id)
+        #         if visualization:
+        #             mentioned_visualizations.append({
+        #                 "visualization_id": visualization.visualization_id,
+        #                 "png_path": visualization.png_path,
+        #                 "json_data": visualization.json_data,
+        #                 "file_path": visualization.file_path
+        #             })
+        #             print(f"Found visualization with ID {viz_id}: {visualization.png_path}")
+        #         else:
+        #             print(f"Visualization with ID {viz_id} not found")
         
-        # TODO: use dummy results for now
+        print("conversation_history: ", conversation_history)
+        
         # Pass mentioned visualizations to the agent
         # a list of conversation
         results = process_with_claude(
-            message.text,
+            conversation_history,
         )
+        
+        print("results: ", results)
         
         ai_message_text = ""
         visualization_ids = []  # empty list for visualization ids
+        signals = []
+        tool_results = ""
         for result in results:
             # if role is tool, then parse the result accordingly
             if result['role'] == 'tool':
@@ -134,19 +148,37 @@ async def send_message(
                     print("type(result['content']): ", type(result['content']))
                     print("result.keys(): ", result.keys())
                     
-                    
-                    json_data = json.loads(result['content'])
+                    json_data = json.loads(result['content']['visualization_result'])
                     # TODO: save, get file path and output png path & change the parameters in create_visualization
                     # Save the json visualization to the database
                     visualization = create_visualization(db, canvas.canvas_id, json_data, "", "")
                     visualization_ids.append(visualization.visualization_id)
-            else:
-                # append all the text messages
-                ai_message_text += result['content']
                     
-                    
-                    
-        
+                    # pass the signal list to the frontend
+                    import uuid
+                    # for every signal in the signal list, generate a new signal id and then pass name and description from signal list
+                    for signal in result['content']['signal_list']:
+                        signal_id = str(uuid.uuid4())
+                        signals.append({
+                            "signal_id": signal_id,
+                            "signal_name": signal["signal_name"],
+                            "signal_description": signal["signal_description"]
+                        })
+                    print("signals: ", signals)
+                elif result['name'] == 'get_cmc_ohlcv' or result['name'] == 'get_data':
+                    # save the result['content'] as a string in the row of the current new message in the Message database as tool_results
+                    # connect all the values in the result['content'] as a string in the tool_results column
+                    new_message.tool_results += json.dumps(result['content'])
+                    db.commit()
+            elif result['role'] == 'assistant':
+                # Save the analysis as a message from the AI to the database
+                ai_message = create_message(
+                    db,
+                    canvas_id=canvas.canvas_id,
+                    user_id=AI_USER_ID,
+                    text=result['content']
+                )
+
         # results = await agent_main(
         #     message.text, 
         #     conversation_history,
@@ -202,24 +234,18 @@ async def send_message(
         # else:
         #     raise HTTPException(status_code=400, detail="Invalid action")
             
-        # Save the analysis as a message from the AI to the database
-        ai_message = create_message(
-            db,
-            canvas_id=canvas.canvas_id,
-            user_id=AI_USER_ID,
-            text=ai_message_text
-        )
         
-        # TODO:
-        # Create dummy signal data for now
-        # Will later be populated with real data from the AI agent
-        signals = []
-        if "bitcoin" in message.text.lower() or "crypto" in message.text.lower():
-            # Example: Add a dummy signal if user mentions bitcoin or crypto
-            signals.append({
-                "signal_id": f"temp_signal_{new_message.message_id}",
-                "signal_definition": f"Price crossover signal derived from {message.text}"
-            })
+        
+        # # TODO:
+        # # Create dummy signal data for now
+        # # Will later be populated with real data from the AI agent
+        # signals = []
+        # if "bitcoin" in message.text.lower() or "crypto" in message.text.lower():
+        #     # Example: Add a dummy signal if user mentions bitcoin or crypto
+        #     signals.append({
+        #         "signal_id": f"temp_signal_{new_message.message_id}",
+        #         "signal_definition": f"Price crossover signal derived from {message.text}"
+        #     })
         
         print("sending these as response: ", {
             "message_id": new_message.message_id,

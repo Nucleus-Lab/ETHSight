@@ -74,7 +74,8 @@ const SignalStorage = ({ canvasId }) => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Definition</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -85,8 +86,11 @@ const SignalStorage = ({ canvasId }) => {
                         <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                           {signal.signal_id}
                         </td>
+                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {signal.signal_name}
+                        </td>
                         <td className="px-4 py-2 text-sm text-gray-500 max-w-xs truncate">
-                          {signal.signal_definition}
+                          {signal.signal_description}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                           {new Date(signal.created_at).toLocaleString()}

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -40,6 +40,7 @@ class MessageDB(Base):
     canvas_id = Column(Integer, ForeignKey("canvases.canvas_id"))
     user_id = Column(Integer, ForeignKey("users.user_id"))
     text = Column(String)
+    tool_results = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -64,7 +65,8 @@ class SignalDB(Base):
     
     signal_id = Column(Integer, primary_key=True, index=True)
     canvas_id = Column(Integer, ForeignKey("canvases.canvas_id"))
-    signal_definition = Column(String)
+    signal_name = Column(String)
+    signal_description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
