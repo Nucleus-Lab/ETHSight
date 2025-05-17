@@ -4,6 +4,11 @@ import re
 from typing import List, Dict
 from io import StringIO
 import json
+from pydantic import BaseModel
+
+class Signal(BaseModel):
+    signal_name: str
+    signal_description: str
 
 class Visualizer(dspy.Signature):
     """
@@ -35,11 +40,22 @@ class Visualizer(dspy.Signature):
     )
     plot_code: str = dspy.OutputField(prefix="The plot python plotly code:")
 
+class SignalIdentifier(dspy.Signature):
+    """
+    You are a signal identifier in python.
+    You are given a user's prompt and sample data of a CSV file.
+    You need to identify the signal in the data.
+    A signal is a piece of indicator that might be useful for user to trade.
+    """
+    prompt = dspy.InputField(prefix="User's prompt:")
+    sample_data = dspy.InputField(prefix="The sample data of the CSV file:")
+    signal_list: list[Signal] = dspy.OutputField(prefix="The signal in the data:")
 
 class VisualizerAgent:
     def __init__(self, engine=None) -> None:
         self.engine = engine
         self.visualize = dspy.Predict(Visualizer, max_tokens=16000)
+        self.signal_identifier = dspy.Predict(SignalIdentifier)
         
     def visualize_by_prompt(
         self, prompt: str, task: str, file_path: str, output_png_path: str, conversation_history: List[Dict[str, str]] = None
@@ -172,7 +188,18 @@ Please fix the code and try again. Here's the code that failed:
         except Exception as e:
             print(f"[ERROR] Failed to read or process file: {str(e)}")
             raise
-
+    
+    def identify_signal(self, prompt: str, file_path: str):
+        """
+        Identify the signal in the data
+        """
+        df = pd.read_csv(file_path)
+        sample_data = df.head(5)
+        response = self.signal_identifier(
+            prompt=prompt,
+            sample_data=sample_data
+        )
+        return response.signal_list
 
 # Run a quick test
 if __name__ == "__main__":
