@@ -238,36 +238,43 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
     """
     Process user message with Claude API using defined tools
     
+    Args:
+        conversation_history: Complete conversation history
+        max_turns: Maximum number of turns for the conversation
+        
     Returns:
-        List[Dict[str, Any]]: List of conversation messages including tool calls and results
+        List[Dict[str, Any]]: Latest messages for this turn
     """
-    messages = conversation_history
     current_turn = 0
+    latest_messages = []  # Store only the latest messages for this turn
     
     while current_turn < max_turns:
         print(f"\nTurn {current_turn + 1}:")
         try:
-            # Get response from Claude
+            # Get response from Claude using full conversation history
             response = client.messages.create(
                 model=get_model_config(ModelConfig.SONNET)["model_name"],
                 max_tokens=1024,
-                messages=messages,
+                messages=conversation_history,  # Use full history
                 system=controller_system_prompt,
                 tools=tools
             )
             
-            # Add Claude's response to conversation history
+            # Add Claude's response to both conversation history and latest messages
             if hasattr(response, "content") and isinstance(response.content, list):
                 assistant_message = " ".join([c.text for c in response.content if c.type == "text"])
-                conversation_history.append({
+                message = {
                     "role": "assistant",
                     "content": assistant_message
-                })
+                }
             else:
-                conversation_history.append({
+                message = {
                     "role": "assistant",
                     "content": str(response.content)
-                })
+                }
+            
+            conversation_history.append(message)
+            latest_messages.append(message)
             
             # Print Claude's response
             print("\nClaude's response:")
@@ -294,25 +301,22 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
                 tool_results.append(result)
                 print(f"Tool result: {result['result']}")
                 
-                # Add tool call and result to conversation history
-                conversation_history.append({
+                # Add tool call and result to both conversation history and latest messages
+                tool_message = {
                     "role": "tool",
                     "name": tool_call["name"],
                     "content": result["result"]
-                })
+                }
+                latest_messages.append(tool_message)
             
-            # Add tool results to messages
-            messages.append({
-                "role": "assistant",
-                "content": [{"type": "text", "text": str(response.content)}] if isinstance(response.content, list) else str(response.content)
-            })
-            
-            # Convert tool results to JSON string before adding to messages
+            # Add tool results to conversation history
             tool_results_message = json.dumps({"tool_results": tool_results})
-            messages.append({
+            user_message = {
                 "role": "user",
                 "content": tool_results_message
-            })
+            }
+            conversation_history.append(user_message)
+            latest_messages.append(user_message)
             
             # Print tool results
             print("\nTool execution results:")
@@ -322,11 +326,14 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
             
         except Exception as e:
             print(f"Error in turn {current_turn + 1}: {str(e)}")
-            conversation_history.append({
+            error_message = {
                 "role": "error",
                 "content": f"Error occurred: {str(e)}"
-            })
-            return conversation_history
+            }
+            conversation_history.append(error_message)
+            latest_messages.append(error_message)
+            return latest_messages
     
-    print(conversation_history)
-    return conversation_history
+    print("\nLatest messages for this turn:")
+    print(latest_messages)
+    return latest_messages
