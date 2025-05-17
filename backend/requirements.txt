@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+plotly
+numpy
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+simplejson

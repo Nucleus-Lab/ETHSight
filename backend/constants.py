@@ -1,0 +1,3 @@
+# AI User constants
+AI_USER_ID = 0  # Reserved ID for AI
+AI_WALLET_ADDRESS = "0x0000000000000000000000000000000000000000"  # Reserved address for AI 
