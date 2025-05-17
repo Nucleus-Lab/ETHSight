@@ -118,17 +118,40 @@ async def send_message(
         
         # TODO: use dummy results for now
         # Pass mentioned visualizations to the agent
+        # a list of conversation
         results = process_with_claude(
             message.text,
         )
-        ai_message_text = results
+        
+        ai_message_text = ""
+        visualization_ids = []  # empty list for visualization ids
+        for result in results:
+            # if role is tool, then parse the result accordingly
+            if result['role'] == 'tool':
+                if result['name'] == 'visualize':
+                    
+                    print("result['content']: ", result['content'])
+                    print("type(result['content']): ", type(result['content']))
+                    print("result.keys(): ", result.keys())
+                    
+                    
+                    json_data = json.loads(result['content'])
+                    # TODO: save, get file path and output png path & change the parameters in create_visualization
+                    # Save the json visualization to the database
+                    visualization = create_visualization(db, canvas.canvas_id, json_data, "", "")
+                    visualization_ids.append(visualization.visualization_id)
+            else:
+                # append all the text messages
+                ai_message_text += result['content']
+                    
+                    
+                    
         
         # results = await agent_main(
         #     message.text, 
         #     conversation_history,
         #     mentioned_visualizations=mentioned_visualizations
         # )
-        visualization_ids = []  # empty list for visualization ids
         
         # if results["action"] == "GENERAL_CHAT":
         #     ai_message_text = results["message"]
