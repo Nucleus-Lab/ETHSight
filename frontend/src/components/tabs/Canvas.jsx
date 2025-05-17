@@ -4,6 +4,7 @@ import { getVisualization, getCanvasVisualizations } from '../../services/api';
 import { useCanvas } from '../../contexts/CanvasContext';
 import { usePrivy } from '@privy-io/react-auth';
 import WelcomeAnimation from '../common/WelcomeAnimation';
+import SignalStorage from '../signal/SignalStorage';
 
 const Canvas = ({ visualizationIds = [], setActiveVisualizations }) => {
   const { currentCanvasId } = useCanvas();
@@ -146,14 +147,19 @@ const Canvas = ({ visualizationIds = [], setActiveVisualizations }) => {
 
   if (visualizations.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-500">
-        No visualizations available
+      <div className="relative h-full">
+        <div className="h-full flex items-center justify-center text-gray-500">
+          No visualizations available
+        </div>
+        
+        {/* Signal Storage Component - still visible when no visualizations */}
+        <SignalStorage canvasId={currentCanvasId} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col w-full space-y-6 p-4 overflow-y-auto">
+    <div className="flex flex-col w-full space-y-6 p-4 overflow-y-auto relative">
       {visualizations.map((visualization, index) => (
         <div 
           key={`viz-${visualization.id || index}`}
@@ -166,6 +172,9 @@ const Canvas = ({ visualizationIds = [], setActiveVisualizations }) => {
         </div>
       ))}
       <div ref={bottomRef} /> {/* Add ref for auto-scrolling */}
+      
+      {/* Signal Storage Component */}
+      <SignalStorage canvasId={currentCanvasId} />
     </div>
   );
 };

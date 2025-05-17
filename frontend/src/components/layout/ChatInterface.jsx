@@ -5,6 +5,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { sendMessage, getCanvasMessages, getMessage } from '../../services/api';
 import Message from '../chat/Message';
+import SignalSavePrompt from '../chat/SignalSavePrompt';
 import PropTypes from 'prop-types';
 import { AI_USER_ID } from '../../constants/constants';
 import MCPSelector from '../MCPSelector';
@@ -12,6 +13,7 @@ import MCPSelector from '../MCPSelector';
 const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const [currentSignals, setCurrentSignals] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { isChatOpen, setIsChatOpen, chatInputText, setChatInputText } = useChatContext();
@@ -29,7 +31,7 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, currentSignals]);
 
   // Load messages when canvas changes
   useEffect(() => {
@@ -50,6 +52,10 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
             isUser: parseInt(msg.user_id) !== AI_USER_ID, // Check if the message is from AI
             timestamp: msg.created_at
           })));
+          
+          // // Clear any current signals when loading a different canvas
+          // TODO: Remove this after testing
+          // setCurrentSignals([]);
         } catch (error) {
           console.error('Failed to load messages:', error);
         } finally {
@@ -57,6 +63,7 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
         }
       } else {
         setMessages([]); // Clear messages when no canvas is selected
+        setCurrentSignals([]); // Clear signals as well
       }
     };
 
@@ -67,6 +74,7 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
   useEffect(() => {
     if (!authenticated) {
       setMessages([]);
+      setCurrentSignals([]);
       clearCanvas();
     }
   }, [authenticated, clearCanvas]);
@@ -98,6 +106,69 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
   const highlightMentions = (text) => {
     return text.replace(/@\s*fig:(\d+)/g, '<span class="bg-blue-100 text-blue-800 px-1 rounded">@fig:$1</span>');
   };
+  
+  // Handle signal saved event to trigger animations
+  const handleSignalSaved = (signalId) => {
+    console.log(`Signal ${signalId} saved, triggering animation`);
+    
+    // Create an animation for signal storage
+    const animateSignalToStorage = () => {
+      // Create a floating element that moves to the signal storage button
+      const floatingEl = document.createElement('div');
+      floatingEl.className = 'fixed z-50 bg-primary-main text-black rounded-full p-2 shadow-lg transition-all duration-700 ease-in-out';
+      floatingEl.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      `;
+      
+      // Position floating element
+      const signalElement = document.querySelector(`[data-signal-id="${signalId}"]`);
+      if (!signalElement) return;
+      
+      const signalRect = signalElement.getBoundingClientRect();
+      
+      // Get signal storage button position
+      const storageButton = document.querySelector('[data-signal-storage-button]');
+      if (!storageButton) return;
+      
+      const buttonRect = storageButton.getBoundingClientRect();
+      
+      // Position floating element near the signal prompt
+      floatingEl.style.left = `${signalRect.right - 30}px`;
+      floatingEl.style.top = `${signalRect.top}px`;
+      document.body.appendChild(floatingEl);
+      
+      // Animate to storage button
+      setTimeout(() => {
+        floatingEl.style.left = `${buttonRect.left + buttonRect.width/2 - 10}px`;
+        floatingEl.style.top = `${buttonRect.top + buttonRect.height/2 - 10}px`;
+        floatingEl.style.transform = 'scale(0.5)';
+        floatingEl.style.opacity = '0.8';
+        
+        // Remove the element after animation completes
+        setTimeout(() => {
+          document.body.removeChild(floatingEl);
+          
+          // Flash the storage button
+          storageButton.classList.add('ring-4', 'ring-primary-main', 'ring-opacity-75');
+          setTimeout(() => {
+            storageButton.classList.remove('ring-4', 'ring-primary-main', 'ring-opacity-75');
+          }, 700);
+          
+        }, 800);
+      }, 100);
+    };
+    
+    // Remove the saved signal from current signals
+    setCurrentSignals(prev => prev.filter(signal => signal.signal_id !== signalId));
+    
+    // Run animation
+    animateSignalToStorage();
+    
+    // Switch to canvas tab to show signals
+    setActiveTab('canvas');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -109,6 +180,9 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
     const userMessage = message;
     setMessage(''); // Clear input immediately
     setIsLoading(true);
+    
+    // Clear any current signals when sending a new message
+    setCurrentSignals([]);
 
     try {
       // Extract visualization IDs from the message
@@ -141,8 +215,22 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
         mentionedVisualizationIds: mentionedVisualizationIds
       });
 
+      // Log the full response to help with debugging
+      console.log('Full API response:', response);
+      console.log('Response signal details:', {
+        hasSignals: !!response.signals,
+        signalsLength: response.signals ? response.signals.length : 0
+      });
+      
       if (!currentCanvasId) {
         setCurrentCanvasId(response.canvas_id);
+      }
+
+      // Set signals if any were returned (separate from messages)
+      if (response.signals && Array.isArray(response.signals) && response.signals.length > 0) {
+        console.log('Setting current signals:', response.signals);
+        setCurrentSignals(response.signals);
+        console.log('Current signals state:', currentSignals);
       }
 
       // Remove typing indicator and add AI response
@@ -150,26 +238,29 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
         // Remove the typing indicator
         const withoutTyping = prev.filter(msg => msg.id !== typingId);
         
-        // Add the AI response
+        // Create the AI message 
         const aiMessage = {
           id: response.ai_message_id,
-          text: response.ai_message_text,
+          text: "Loading response...", // Placeholder until we get the full message
           isUser: false,
-          timestamp: response.created_at
+          timestamp: response.created_at || new Date().toISOString()
         };
 
-        // Get the message from the API if needed
+        // Get the complete message from the API
         if (response.ai_message_id) {
           getMessage(response.ai_message_id)
             .then(fullMessage => {
-              // Update the message with complete data if needed
+              console.log('Retrieved full message:', fullMessage);
+              // Update the message with complete text
               setMessages(prev => prev.map(msg => 
                 msg.id === response.ai_message_id 
                   ? { ...msg, text: fullMessage.text }
                   : msg
               ));
             })
-            .catch(console.error);
+            .catch(error => {
+              console.error('Error fetching message text:', error);
+            });
         }
 
         return [...withoutTyping, aiMessage];
@@ -273,14 +364,15 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
     return (
       <div className="w-full">
         {messages.map((msg) => (
-          <Message
-            key={msg.id}
-            text={msg.text}
-            isUser={msg.isUser}
-            timestamp={msg.timestamp}
-            isError={msg.isError}
-            isTyping={msg.isTyping}
-          />
+          <div key={msg.id}>
+            <Message
+              text={msg.text}
+              isUser={msg.isUser}
+              timestamp={msg.timestamp}
+              isError={msg.isError}
+              isTyping={msg.isTyping}
+            />
+          </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -304,6 +396,20 @@ const ChatInterface = ({ setActiveTab, setActiveVisualizations }) => {
       <div className="flex-1 overflow-y-auto">
         <div className="w-full">
           {renderMessages()}
+          
+          {/* Display signals at the bottom of the chat */}
+          {currentSignals && currentSignals.length > 0 && (
+            <div className="p-3 space-y-2">
+              {currentSignals.map((signal) => (
+                <div key={signal.signal_id} data-signal-id={signal.signal_id}>
+                  <SignalSavePrompt 
+                    signal={signal}
+                    onSaved={handleSignalSaved}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

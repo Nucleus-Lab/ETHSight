@@ -160,7 +160,7 @@ const Message = ({ text, isUser, timestamp, isError, isTyping }) => {
   }
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2 px-3`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 px-3`}>
       <div 
         className={`max-w-[90%] break-words rounded-2xl shadow-sm text-left
           ${isUser 
@@ -169,7 +169,8 @@ const Message = ({ text, isUser, timestamp, isError, isTyping }) => {
           } px-3 py-2`}
       >
         <div className={`text-sm whitespace-pre-wrap overflow-wrap-anywhere text-left
-          ${isError ? 'text-red-500' : ''}`}
+          ${isError ? 'text-red-500' : ''}
+          ${text === 'Loading response...' ? 'text-gray-400 italic' : ''}`}
         >
           {isUser ? (
             // For user messages, just highlight mentions
@@ -204,13 +205,14 @@ const Message = ({ text, isUser, timestamp, isError, isTyping }) => {
 Message.propTypes = {
   text: PropTypes.string.isRequired,
   isUser: PropTypes.bool.isRequired,
-  timestamp: PropTypes.string.isRequired,
+  timestamp: PropTypes.string,
   isError: PropTypes.bool,
   isTyping: PropTypes.bool
 };
 
 Message.defaultProps = {
-  isError: false
+  isError: false,
+  timestamp: ''
 };
 
 export default Message; 

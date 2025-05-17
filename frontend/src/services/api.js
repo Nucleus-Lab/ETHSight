@@ -43,7 +43,12 @@ export const sendMessage = async ({ walletAddress, canvasId = null, text, mentio
     }
 
     const data = await response.json();
-    console.log('Response data:', data); // Debug log
+    console.log('Response data structure:', {
+      keys: Object.keys(data),
+      hasSignals: !!data.signals,
+      signalsType: data.signals ? typeof data.signals : 'not present',
+      signalsValue: data.signals
+    }); // Debug log for response structure
     return data;
   } catch (error) {
     console.error('Error sending message:', error);
@@ -241,6 +246,70 @@ export const getCanvasVisualizations = async (canvasId) => {
     return await response.json();
   } catch (error) {
     console.error('Error fetching canvas visualizations:', error);
+    throw error;
+  }
+};
+
+// Get all signals for a specific canvas
+export const getSignalsForCanvas = async (canvasId) => {
+  try {
+    console.log(`Fetching signals for canvas: ${canvasId}`);
+    const response = await fetch(`${BACKEND_API_BASE_URL}/canvas/${canvasId}/signals`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch signals for canvas');
+    }
+    
+    const data = await response.json();
+    console.log('Canvas signals data:', data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching signals for canvas:', error);
+    throw error;
+  }
+};
+
+// Get all signals for a user by wallet address
+export const getAllSignalsForUser = async (walletAddress) => {
+  try {
+    console.log(`Fetching signals for user: ${walletAddress}`);
+    const response = await fetch(`${BACKEND_API_BASE_URL}/signals/user/${walletAddress}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch signals for user');
+    }
+    
+    const data = await response.json();
+    console.log('User signals data:', data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching signals for user:', error);
+    throw error;
+  }
+};
+
+// Create a new signal
+export const createSignal = async (signalData) => {
+  try {
+    console.log('Creating signal with data:', signalData);
+    const response = await fetch(`${BACKEND_API_BASE_URL}/signal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(signalData)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to create signal');
+    }
+    
+    const data = await response.json();
+    console.log('Created signal:', data);
+    return data;
+  } catch (error) {
+    console.error('Error creating signal:', error);
     throw error;
   }
 };

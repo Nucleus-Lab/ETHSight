@@ -1,19 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChatContext } from '../../contexts/ChatContext';
 import { usePrivy } from '@privy-io/react-auth';
+import { getAllSignalsForUser } from '../../services/api';
 
 const Signals = () => {
-  const { authenticated } = usePrivy();
+  const { authenticated, user } = usePrivy();
   const { setChatInputText } = useChatContext();
   
-  // Dummy data for signals
-  const [signals] = useState([
-    { id: 1, name: "ETHUSD Bearish Divergence", createdAt: "2023-12-01", description: "RSI divergence on 4h timeframe" },
-    { id: 2, name: "BTC Golden Cross", createdAt: "2023-12-05", description: "50 & 200 MA cross on daily chart" },
-    { id: 3, name: "AVAX Volume Spike", createdAt: "2023-12-10", description: "Unusual volume pattern detected" },
-    { id: 4, name: "SOL Bullish Pattern", createdAt: "2023-12-15", description: "Inverse head and shoulders formation" },
-    { id: 5, name: "ARB Support Bounce", createdAt: "2023-12-20", description: "Price bounced off major support level" }
-  ]);
+  const [signals, setSignals] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Fetch signals when component mounts
+  useEffect(() => {
+    const fetchSignals = async () => {
+      if (!authenticated || !user?.wallet?.address) return;
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const userSignals = await getAllSignalsForUser(user.wallet.address);
+        console.log('Fetched user signals:', userSignals);
+        setSignals(userSignals);
+      } catch (err) {
+        console.error('Error fetching signals:', err);
+        setError('Failed to load signals. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchSignals();
+  }, [authenticated, user?.wallet?.address]);
   
   const addSignalToChat = (signalId) => {
     // Use the Context function to append to chat input
@@ -33,6 +52,34 @@ const Signals = () => {
     );
   }
   
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-main"></div>
+      </div>
+    );
+  }
+  
+  // Show error state
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
+  
+  // Show empty state
+  if (signals.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center flex-col">
+        <p className="text-gray-500 mb-2">No signals found</p>
+        <p className="text-sm text-gray-400">Start creating signals in your chat conversations</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="container mx-auto py-4">
       <h2 className="text-xl font-semibold mb-4">Saved Signals</h2>
@@ -44,13 +91,10 @@ const Signals = () => {
                 ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
+                Signal Definition
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Created
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -59,22 +103,19 @@ const Signals = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {signals.map((signal) => (
-              <tr key={signal.id} className="hover:bg-gray-50">
+              <tr key={signal.signal_id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {signal.id}
+                  {signal.signal_id}
+                </td>
+                <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-500 max-w-md">
+                  {signal.signal_definition}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {signal.name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {signal.createdAt}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {signal.description}
+                  {new Date(signal.created_at).toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
-                    onClick={() => addSignalToChat(signal.id)}
+                    onClick={() => addSignalToChat(signal.signal_id)}
                     className="px-3 py-1 bg-primary-main text-black rounded hover:bg-primary-hover transition-colors duration-200"
                   >
                     Use for backtest
