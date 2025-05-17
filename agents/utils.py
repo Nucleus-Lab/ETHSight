@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import json
 import os
+from pathlib import Path
+import uuid
 
 class BitqueryAPI:
     def __init__(self, api_key):
@@ -40,3 +42,161 @@ class BitqueryAPI:
         except requests.exceptions.RequestException as e:
             print(f"Error making request: {e}")
             return None
+
+class CMCAPI:
+    def __init__(self, api_key):
+        """
+        Initialize CMC API client
+        
+        Args:
+            api_key (str): CoinMarketCap API key
+        """
+        self.api_key = api_key
+        self.base_url = "https://pro-api.coinmarketcap.com/v2"
+        self.headers = {
+            "X-CMC_PRO_API_KEY": self.api_key,
+            "Accept": "application/json"
+        }
+
+    def get_historical_quotes(self,
+                            symbol: str,
+                            time_start: str = None,
+                            time_end: str = None,
+                            interval: str = "1d",
+                            convert: str = "USD") -> pd.DataFrame:
+        """
+        Get historical OHLCV data for a cryptocurrency
+        
+        Args:
+            symbol (str): Cryptocurrency symbol (e.g., 'BTC', 'ETH')
+            time_start (str, optional): Start time in ISO format (e.g., '2023-01-01T00:00:00Z')
+            time_end (str, optional): End time in ISO format (e.g., '2023-12-31T23:59:59Z')
+            interval (str, optional): Time interval. Options:
+                - Minutes: '5m', '10m', '15m', '30m', '45m'
+                - Hours: '1h', '2h', '3h', '4h', '6h', '12h'
+                - Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'
+            convert (str, optional): Currency to convert to. Defaults to 'USD'
+            
+        Returns:
+            pd.DataFrame: DataFrame containing OHLCV data
+        """
+        endpoint = f"{self.base_url}/cryptocurrency/quotes/historical"
+        
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "convert": convert
+        }
+        
+        if time_start:
+            params["time_start"] = time_start
+        if time_end:
+            params["time_end"] = time_end
+            
+        try:
+            print(f"\nMaking request to CMC API:")
+            print(f"Endpoint: {endpoint}")
+            print(f"Params: {params}")
+            
+            response = requests.get(
+                endpoint,
+                headers=self.headers,
+                params=params
+            )
+            
+            print(f"\nResponse status code: {response.status_code}")
+            
+            if response.status_code != 200:
+                print(f"Error response: {response.text}")
+                return pd.DataFrame()
+                
+            data = response.json()
+            print(f"\nResponse data: {json.dumps(data, indent=2)}")
+            
+            if not data.get('data'):
+                print("No data found in response")
+                return pd.DataFrame()
+                
+            # Get the first item from the symbol array
+            symbol_data = data['data'].get(symbol)
+            if not symbol_data or not isinstance(symbol_data, list) or len(symbol_data) == 0:
+                print(f"No data found for symbol {symbol}")
+                return pd.DataFrame()
+                
+            quotes = symbol_data[0].get('quotes')
+            if not quotes:
+                print("No quotes data found")
+                return pd.DataFrame()
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(quotes)
+            
+            # Convert timestamp to datetime
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df.set_index('timestamp', inplace=True)
+            
+            # Extract USD quote data
+            df = pd.json_normalize(df['quote'].apply(lambda x: x['USD']))
+            df.index = pd.to_datetime(df['timestamp'])
+            df = df.drop('timestamp', axis=1)
+            
+            # Rename columns to match standard OHLCV format
+            df = df.rename(columns={
+                'price': 'close',  # Using price as close price
+                'volume_24h': 'volume'
+            })
+            
+            # Add missing OHLC columns (using close price as they're not provided)
+            df['open'] = df['close']
+            df['high'] = df['close']
+            df['low'] = df['close']
+            
+            # Reorder columns to match standard OHLCV format
+            df = df[['open', 'high', 'low', 'close', 'volume']]
+            
+            return df
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching data from CMC: {e}")
+            if hasattr(e.response, 'text'):
+                print(f"Response text: {e.response.text}")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return pd.DataFrame()
+            
+    def _save_to_csv(self, df: pd.DataFrame, symbol: str, interval: str) -> dict:
+        """
+        Save DataFrame to CSV file
+        
+        Args:
+            df (pd.DataFrame): DataFrame to save
+            symbol (str): Cryptocurrency symbol
+            interval (str): Time interval
+            
+        Returns:
+            dict: Dictionary containing file path and data preview
+        """
+        try:
+            # Create data directory if it doesn't exist
+            data_dir = Path("data/cmc_data")
+            data_dir.mkdir(exist_ok=True, parents=True)
+            
+            # Generate unique filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_id = str(uuid.uuid4())
+            file_path = str(data_dir / f"cmc_{symbol}_{interval}_{timestamp}_{file_id}.csv")
+            
+            # Save to CSV
+            df.to_csv(file_path)
+            print(f"Data saved to {file_path}")
+            
+            return {
+                "file_path": file_path,
+                "df_head": df.head().to_string(),
+                "description": f"CMC historical OHLCV data for {symbol} with {interval} interval"
+            }
+            
+        except Exception as e:
+            print(f"Error saving data to CSV: {e}")
+            return None 

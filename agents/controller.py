@@ -10,6 +10,7 @@ from agents.visualizer import VisualizerAgent
 from agents.data_processor import DataProcessor
 from datetime import datetime
 import uuid
+from agents.utils import CMCAPI
 
 # Load environment variables
 load_dotenv()
@@ -82,6 +83,37 @@ tools = [
             },
             "required": ["file_path", "prompt"]
         }
+    },
+    {
+        "name": "get_cmc_ohlcv",
+        "description": "Get historical OHLCV data from CoinMarketCap",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Cryptocurrency symbol, e.g. BTC, ETH, WETH"
+                },
+                "time_start": {
+                    "type": "string",
+                    "description": "Start time in ISO format, e.g. 2023-01-01T00:00:00Z"
+                },
+                "time_end": {
+                    "type": "string",
+                    "description": "End time in ISO format, e.g. 2023-01-07T23:59:59Z"
+                },
+                "interval": {
+                    "type": "string",
+                    "description": "Interval, e.g. 1d, 1h, 5m, etc."
+                },
+                "convert": {
+                    "type": "string",
+                    "description": "Convert currency, e.g. USD",
+                    "default": "USD"
+                }
+            },
+            "required": ["symbol", "time_start", "time_end", "interval"]
+        }
     }
 ]
 
@@ -149,6 +181,43 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                 return {
                     "tool_name": tool_name,
                     "result": "Failed to process data"
+                }
+        elif tool_name == "get_cmc_ohlcv":
+            api_key = os.getenv("CMC_API_KEY")
+            if not api_key:
+                return {
+                    "tool_name": tool_name,
+                    "result": "CMC_API_KEY not found in environment variables"
+                }
+            cmc = CMCAPI(api_key=api_key)
+            df = cmc.get_historical_quotes(
+                symbol=args["symbol"],
+                time_start=args.get("time_start"),
+                time_end=args.get("time_end"),
+                interval=args.get("interval", "1d"),
+                convert=args.get("convert", "USD")
+            )
+            if df is not None and not df.empty:
+                # Generate a unique filename
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                file_id = str(uuid.uuid4())
+                file_path = f"data/cmc_data/cmc_{args['symbol']}_{args.get('interval', '1d')}_{timestamp}_{file_id}.csv"
+                
+                # Save to CSV
+                df.to_csv(file_path)
+                
+                return {
+                    "tool_name": tool_name,
+                    "result": {
+                        "file_path": file_path,
+                        "df_head": df.head().to_string(),
+                        "description": f"CMC historical OHLCV data for {args['symbol']} with {args.get('interval', '1d')} interval"
+                    }
+                }
+            else:
+                return {
+                    "tool_name": tool_name,
+                    "result": "No data returned from CMC for the given parameters."
                 }
         else:
             return {
