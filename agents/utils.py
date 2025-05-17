@@ -69,10 +69,9 @@ class CMCAPI:
         
         Args:
             symbol (str): Cryptocurrency symbol (e.g., 'BTC', 'ETH')
-            time_start (str, optional): Start time in ISO format (e.g., '2023-01-01T00:00:00Z')
-            time_end (str, optional): End time in ISO format (e.g., '2023-12-31T23:59:59Z')
+            time_start (str, optional): Start time in ISO format (e.g., '2023-01-01')
+            time_end (str, optional): End time in ISO format (e.g., '2023-12-31')
             interval (str, optional): Time interval. Options:
-                - Minutes: '5m', '10m', '15m', '30m', '45m'
                 - Hours: '1h', '2h', '3h', '4h', '6h', '12h'
                 - Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'
             convert (str, optional): Currency to convert to. Defaults to 'USD'
@@ -80,10 +79,14 @@ class CMCAPI:
         Returns:
             pd.DataFrame: DataFrame containing OHLCV data
         """
-        endpoint = f"{self.base_url}/cryptocurrency/quotes/historical"
+        endpoint = f"{self.base_url}/cryptocurrency/ohlcv/historical"
+        
+        # Determine time_period based on interval
+        time_period = "hourly" if interval.endswith("h") else "daily"
         
         params = {
             "symbol": symbol,
+            "time_period": time_period,
             "interval": interval,
             "convert": convert
         }
@@ -128,31 +131,36 @@ class CMCAPI:
                 print("No quotes data found")
                 return pd.DataFrame()
             
+            # Print the structure of the first quote to understand the data format
+            if quotes and len(quotes) > 0:
+                print("\nFirst quote structure:")
+                print(json.dumps(quotes[0], indent=2))
+            
             # Convert to DataFrame
             df = pd.DataFrame(quotes)
             
             # Convert timestamp to datetime
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df.set_index('timestamp', inplace=True)
+            df['time_open'] = pd.to_datetime(df['time_open'])
+            df.set_index('time_open', inplace=True)
             
             # Extract USD quote data
             df = pd.json_normalize(df['quote'].apply(lambda x: x['USD']))
-            df.index = pd.to_datetime(df['timestamp'])
-            df = df.drop('timestamp', axis=1)
             
             # Rename columns to match standard OHLCV format
             df = df.rename(columns={
-                'price': 'close',  # Using price as close price
-                'volume_24h': 'volume'
+                'open': 'open',
+                'high': 'high',
+                'low': 'low',
+                'close': 'close',
+                'volume': 'volume'
             })
-            
-            # Add missing OHLC columns (using close price as they're not provided)
-            df['open'] = df['open']
-            df['high'] = df['high']
-            df['low'] = df['low']
             
             # Reorder columns to match standard OHLCV format
             df = df[['open', 'high', 'low', 'close', 'volume']]
+            
+            # Print the final DataFrame structure
+            print("\nFinal DataFrame structure:")
+            print(df.head())
             
             return df
             
