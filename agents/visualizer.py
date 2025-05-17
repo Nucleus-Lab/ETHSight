@@ -198,8 +198,10 @@ Please fix the code and try again. Here's the code that failed:
         response = self.signal_identifier(
             prompt=prompt,
             sample_data=sample_data
-        )
-        return response.signal_list
+        ).signal_list
+        
+        result = [{'signal_name': signal.signal_name, 'signal_description': signal.signal_description} for signal in response]
+        return result
 
 # Run a quick test
 if __name__ == "__main__":
