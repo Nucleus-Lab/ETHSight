@@ -6,6 +6,9 @@ from agents.prompt import controller_system_prompt
 from dotenv import load_dotenv
 from agents.data_retriever import BitqueryDataRetriever
 from agents.config import get_model_config, ModelConfig
+from agents.visualizer import VisualizerAgent
+from datetime import datetime
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -18,8 +21,9 @@ if not api_key:
 # Initialize Anthropic client
 client = anthropic.Anthropic(api_key=api_key)
 
-# Initialize data retriever
+# Initialize agents
 data_retriever = BitqueryDataRetriever()
+visualizer = VisualizerAgent()
 
 # Define tools
 tools = [
@@ -38,29 +42,6 @@ tools = [
         }
     },
     {
-        "name": "calculate",
-        "description": "Perform calculations on the provided data",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "data_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "filename": {"type": "string"},
-                            "description": {"type": "string"},
-                            "df_head": {"type": "string"},
-                            "expected_result": {"type": "string"}
-                        }
-                    },
-                    "description": "List of data files with their descriptions and expected results"
-                }
-            },
-            "required": ["data_list"]
-        }
-    },
-    {
         "name": "visualize",
         "description": "Create visualization based on user query and data",
         "input_schema": {
@@ -68,22 +49,18 @@ tools = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "User's visualization requirements"
+                    "description": "The visualization requirements"
                 },
-                "data_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "filename": {"type": "string"},
-                            "description": {"type": "string"},
-                            "df_head": {"type": "string"}
-                        }
-                    },
-                    "description": "List of data files to visualize"
+                "task": {
+                    "type": "string",
+                    "description": "The current task split from the user's prompt"
+                },
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the data file"
                 }
             },
-            "required": ["query", "data_list"]
+            "required": ["query", "task", "file_path"]
         }
     }
 ]
@@ -117,13 +94,26 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
             if result is not None:
                 return {
                     "tool_name": tool_name,
-                    "result": f"Data retrieved successfully. File saved to {result}"
+                    "result": result
                 }
             else:
                 return {
                     "tool_name": tool_name,
                     "result": "Failed to retrieve data"
                 }
+        elif tool_name == "visualize":
+            # Generate a unique output path for the visualization
+            output_path = f"data/visualization_results/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4()}.png"
+            result = visualizer.visualize_by_prompt(
+                prompt=args["query"],
+                task=args["task"],
+                file_path=args["file_path"],
+                output_png_path=output_path
+            )
+            return {
+                "tool_name": tool_name,
+                "result": result
+            }
         else:
             return {
                 "tool_name": tool_name,
@@ -135,13 +125,16 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
             "result": f"Error executing tool: {str(e)}"
         }
 
-def process_with_claude(user_message: str, max_turns: int = 5) -> str:
+def process_with_claude(user_message: str, max_turns: int = 5) -> List[Dict[str, Any]]:
     """
     Process user message with Claude API using defined tools
+    
+    Returns:
+        List[Dict[str, Any]]: List of conversation messages including tool calls and results
     """
     messages = [{"role": "user", "content": user_message}]
     current_turn = 0
-    final_response = None
+    conversation_history = []
     
     while current_turn < max_turns:
         print(f"\nTurn {current_turn + 1}:")
@@ -155,6 +148,19 @@ def process_with_claude(user_message: str, max_turns: int = 5) -> str:
                 tools=tools
             )
             
+            # Add Claude's response to conversation history
+            if hasattr(response, "content") and isinstance(response.content, list):
+                assistant_message = " ".join([c.text for c in response.content if c.type == "text"])
+                conversation_history.append({
+                    "role": "assistant",
+                    "content": assistant_message
+                })
+            else:
+                conversation_history.append({
+                    "role": "assistant",
+                    "content": str(response.content)
+                })
+            
             # Print Claude's response
             print("\nClaude's response:")
             if hasattr(response, "content") and isinstance(response.content, list):
@@ -164,17 +170,12 @@ def process_with_claude(user_message: str, max_turns: int = 5) -> str:
             else:
                 print(response.content)
             
-
             # Process tool calls if any
             tool_calls = process_tool_calls(response)
             print(tool_calls)
             
             if not tool_calls:
                 # If no tool calls, this is the final response
-                if hasattr(response, "content") and isinstance(response.content, list):
-                    final_response = " ".join([c.text for c in response.content if c.type == "text"])
-                else:
-                    final_response = str(response.content)
                 break
             
             # Execute tools and collect results
@@ -184,6 +185,13 @@ def process_with_claude(user_message: str, max_turns: int = 5) -> str:
                 result = execute_tool(tool_call)
                 tool_results.append(result)
                 print(f"Tool result: {result['result']}")
+                
+                # Add tool call and result to conversation history
+                conversation_history.append({
+                    "role": "tool",
+                    "name": tool_call["name"],
+                    "content": result["result"]
+                })
             
             # Add tool results to messages
             messages.append({
@@ -206,8 +214,11 @@ def process_with_claude(user_message: str, max_turns: int = 5) -> str:
             
         except Exception as e:
             print(f"Error in turn {current_turn + 1}: {str(e)}")
-            return f"Error occurred: {str(e)}"
+            conversation_history.append({
+                "role": "error",
+                "content": f"Error occurred: {str(e)}"
+            })
+            return conversation_history
     
-    if final_response is None:
-        return "Maximum number of turns reached without final response"
-    return final_response
+    print(conversation_history)
+    return conversation_history

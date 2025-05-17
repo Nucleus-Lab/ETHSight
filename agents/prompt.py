@@ -8,27 +8,32 @@ GRAPHQL_RULES = """
 
 # Example Output
 {
-    EVM(dataset: combined, network: eth) {
-        DEXTradeByTokens(
-        orderBy: {descendingByField: "volumeUsd"}
-        limit: {count: 10}
-        where: {Trade: {Dex: {ProtocolName: {is: "uniswap_v3"}}}}
-        ) {
-        Trade {
-            Currency {
-            SmartContract
-            Symbol
-            Name
+  EVM(dataset: combined, network: eth) {
+    DEXTradeByTokens(
+      orderBy: {descendingByField: "volumeUsd"}
+      limit: {count: 10}
+      where: {
+        Trade: {
+          Dex: {
+            ProtocolName: {
+              is: "uniswap_v3"
             }
-            Dex {
-            ProtocolName
-            }
-        }
-        volumeUsd: sum(of: Trade_Side_AmountInUSD)
-        count
+          }
         }
       }
+    ) {
+      Trade {
+        Currency {
+          SmartContract
+          Symbol
+          Name
+        }
+      }
+      volumeUsd: sum(of: Trade_Side_AmountInUSD)
+      count
     }
+  }
+}
     
    
 
