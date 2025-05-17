@@ -92,23 +92,24 @@ tools = [
             "properties": {
                 "symbol": {
                     "type": "string",
-                    "description": "Cryptocurrency symbol, e.g. BTC, ETH, WETH"
+                    "description": "Cryptocurrency symbol (e.g., 'BTC', 'ETH')"
                 },
                 "time_start": {
                     "type": "string",
-                    "description": "Start time in ISO format, e.g. 2023-01-01T00:00:00Z"
+                    "description": "Start time in ISO format (e.g., '2023-01-01')"
                 },
                 "time_end": {
                     "type": "string",
-                    "description": "End time in ISO format, e.g. 2023-01-07T23:59:59Z"
+                    "description": "End time in ISO format (e.g., '2023-12-31')"
                 },
                 "interval": {
                     "type": "string",
-                    "description": "Interval, e.g. 1d, 1h, 5m, etc."
+                    "description": "Time interval. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'",
+                    "default": "1d"
                 },
                 "convert": {
                     "type": "string",
-                    "description": "Convert currency, e.g. USD",
+                    "description": "Currency to convert to",
                     "default": "USD"
                 }
             },
