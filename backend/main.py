@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routes import canvas_router, user_router, message_router, visualization_router, mcp_router, signal_router
+from backend.routes import canvas_router, user_router, message_router, visualization_router, mcp_router, signal_router, strategy_router
 from backend.database.init_db import init_db
 
 # Initialize the database
@@ -24,6 +24,7 @@ app.include_router(message_router)
 app.include_router(visualization_router)
 app.include_router(mcp_router)
 app.include_router(signal_router)
+app.include_router(strategy_router)
 
 @app.get("/")
 async def root():
