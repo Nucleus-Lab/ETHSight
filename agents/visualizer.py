@@ -5,6 +5,17 @@ from typing import List, Dict
 from io import StringIO
 import json
 from pydantic import BaseModel
+import logging
+from pathlib import Path
+
+# Set up logging
+log_dir = Path(__file__).parent
+log_file = log_dir / 'visualizer.log'
+logging.basicConfig(
+    filename=str(log_file),
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class Signal(BaseModel):
     signal_name: str
@@ -53,6 +64,7 @@ class SignalIdentifier(dspy.Signature):
 
 class VisualizerAgent:
     def __init__(self, engine=None) -> None:
+        logging.info("Initializing VisualizerAgent")
         self.engine = engine
         self.visualize = dspy.Predict(Visualizer, max_tokens=16000)
         self.signal_identifier = dspy.Predict(SignalIdentifier)
@@ -72,13 +84,15 @@ class VisualizerAgent:
         """
         
         try:
+            logging.info(f"Starting visualization for prompt: {prompt}")
+            logging.info(f"Reading data from file: {file_path}")
+            
             # Read the CSV file
             df = pd.read_csv(file_path)
             sample_data = df.head(5)
             
-            print(f"The sample data: {sample_data}")
-            print(f"The column names: {sample_data.columns}")
-            print(f"Conversation history length: {len(conversation_history) if conversation_history else 0}")
+            logging.info(f"Sample data columns: {sample_data.columns}")
+            logging.info(f"Conversation history length: {len(conversation_history) if conversation_history else 0}")
             
             # Add conversation context to the prompt if available
             if conversation_history:
@@ -88,6 +102,7 @@ class VisualizerAgent:
                     context += f"{role}: {msg['content']}\n"
                 prompt = prompt + context
             
+            logging.info("Generating plot code")
             response = self.visualize(
                 prompt=prompt,
                 task=task,
@@ -95,7 +110,7 @@ class VisualizerAgent:
                 sample_data=sample_data,
             )
             plot_code = response.plot_code
-            print(f"[DEBUG] Generated plot code:\n{plot_code}")
+            logging.debug(f"Generated plot code:\n{plot_code}")
             
             # Clean up the code - remove markdown code blocks if present
             plot_code = re.sub(r"```python\s*", "", plot_code)
@@ -120,6 +135,7 @@ class VisualizerAgent:
                 
                 while retry_count < max_retries:
                     try:
+                        logging.info(f"Executing plot code attempt {retry_count + 1}/{max_retries}")
                         # Execute the code in the namespace
                         exec(plot_code, namespace)
                         
@@ -128,26 +144,26 @@ class VisualizerAgent:
                             raise ValueError("Plot code did not create a 'fig' variable")
                         
                         fig = namespace['fig']
-                        print("[INFO] Successfully created plotly figure")
+                        logging.info("Successfully created plotly figure")
                         
                         # Convert to JSON
                         fig_json = fig.to_json()
-                        print("[INFO] Successfully converted figure to JSON")
+                        logging.info("Successfully converted figure to JSON")
                         
                         # Save the figure to the output png path
                         fig.write_image(output_png_path)
-                        print(f"[INFO] Successfully saved figure to {output_png_path}")
+                        logging.info(f"Successfully saved figure to {output_png_path}")
                         
                         return fig_json
                         
                     except Exception as e:
                         last_error = e
                         retry_count += 1
-                        print(f"[ERROR] Attempt {retry_count}/{max_retries} failed: {str(e)}")
+                        logging.error(f"Attempt {retry_count}/{max_retries} failed: {str(e)}")
                         import traceback
                         error_traceback = traceback.format_exc()
-                        print(f"[ERROR] Traceback:\n{error_traceback}")
-                        print(f"[ERROR] Plot code that failed:\n{plot_code}")
+                        logging.error(f"Traceback:\n{error_traceback}")
+                        logging.error(f"Plot code that failed:\n{plot_code}")
                         
                         if retry_count < max_retries:
                             # Prepare error context for the AI
@@ -160,6 +176,7 @@ Traceback:
 Please fix the code and try again. Here's the code that failed:
 {plot_code}
 """
+                            logging.info("Attempting to get fixed code from AI")
                             # Get fixed code from the AI
                             response = self.visualize(
                                 prompt=error_context,
@@ -168,31 +185,32 @@ Please fix the code and try again. Here's the code that failed:
                                 sample_data=sample_data,
                             )
                             plot_code = response.plot_code
-                            print(f"[INFO] Retrying with fixed code:\n{plot_code}")
+                            logging.info(f"Received fixed code from AI:\n{plot_code}")
                             
                             # Clean up the code again
                             plot_code = re.sub(r"```python\s*", "", plot_code)
                             plot_code = re.sub(r"```\s*", "", plot_code)
                             
                         else:
-                            print("[ERROR] Max retries reached. Raising last error.")
+                            logging.error("Max retries reached. Raising last error.")
                             raise last_error
                         
             except Exception as e:
-                print(f"[ERROR] Failed to create plot: {str(e)}")
+                logging.error(f"Failed to create plot: {str(e)}")
                 import traceback
-                traceback.print_exc()
-                print(f"[ERROR] Plot code that failed:\n{plot_code}")
+                logging.error(traceback.format_exc())
+                logging.error(f"Plot code that failed:\n{plot_code}")
                 raise
                 
         except Exception as e:
-            print(f"[ERROR] Failed to read or process file: {str(e)}")
+            logging.error(f"Failed to read or process file: {str(e)}")
             raise
     
     def identify_signal(self, prompt: str, file_path: str):
         """
         Identify the signal in the data
         """
+        logging.info(f"Identifying signals for prompt: {prompt}")
         df = pd.read_csv(file_path)
         sample_data = df.head(5)
         response = self.signal_identifier(
@@ -201,6 +219,7 @@ Please fix the code and try again. Here's the code that failed:
         ).signal_list
         
         result = [{'signal_name': signal.signal_name, 'signal_description': signal.signal_description} for signal in response]
+        logging.info(f"Identified {len(result)} signals")
         return result
 
 # Run a quick test

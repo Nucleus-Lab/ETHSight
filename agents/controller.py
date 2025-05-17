@@ -52,7 +52,7 @@ tools = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The visualization requirements"
+                    "description": "The visualization request specifying what metrics and data to plot. Should align with the user's current prompt and conversation context, considering the CSV file structure."
                 },
                 "task": {
                     "type": "string",
@@ -316,7 +316,6 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
                 "content": tool_results_message
             }
             conversation_history.append(user_message)
-            latest_messages.append(user_message)
             
             # Print tool results
             print("\nTool execution results:")

@@ -147,9 +147,9 @@ class CMCAPI:
             })
             
             # Add missing OHLC columns (using close price as they're not provided)
-            df['open'] = df['close']
-            df['high'] = df['close']
-            df['low'] = df['close']
+            df['open'] = df['open']
+            df['high'] = df['high']
+            df['low'] = df['low']
             
             # Reorder columns to match standard OHLCV format
             df = df[['open', 'high', 'low', 'close', 'volume']]

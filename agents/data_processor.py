@@ -6,6 +6,31 @@ import uuid
 from typing import Dict, Any, Optional
 import dspy
 from agents.config import ModelConfig, get_model_config
+import logging
+import sys
+
+# Set up logging to both file and console
+log_dir = Path(__file__).parent
+log_file = log_dir / 'data_processor.log'
+
+# Create logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Create formatter
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# File handler
+file_handler = logging.FileHandler(str(log_file))
+file_handler.setFormatter(formatter)
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+
+# Add both handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 class CodeGenerator(dspy.Signature):
     """
@@ -17,6 +42,7 @@ class CodeGenerator(dspy.Signature):
     3. Save the processed data to output_file using df.to_csv(output_file, index=False)
     4. If possible, the new data should be new columns or new rows concatenated to the original data.
     5. The code will be directly executed. The namespace will be provided (input_file, output_file).
+    6. Do not save unnecessary columns. Stay focused on the prompt.
     """
     prompt = dspy.InputField(prefix="User's request:")
     sample_data = dspy.InputField(prefix="Sample data from CSV:")
@@ -58,6 +84,9 @@ class DataProcessor:
                 - code: The generated code used for processing
         """
         try:
+            logging.info(f"Processing data from file: {file_path}")
+            logging.info(f"Prompt: {prompt}")
+            
             # Ensure input file exists
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Input file not found: {file_path}")
@@ -88,24 +117,24 @@ class DataProcessor:
                 'output_file': str(output_file)
             }
             
-            print(namespace)
+            logging.info(f"Namespace: {namespace}")
             
-            print("\nGenerated code:")
-            print("="*50)
-            print(code)
-            print("="*50)
+            logging.info("\nGenerated code:")
+            logging.info("="*50)
+            logging.info(code)
+            logging.info("="*50)
             
             # Execute the generated code
-            print("\nExecuting code...")
+            logging.info("\nExecuting code...")
             exec(code, namespace)
             
-            # Print execution results
-            print("\nExecution results:")
-            print("="*50)
+            # Log execution results
+            logging.info("\nExecution results:")
+            logging.info("="*50)
             if 'df' in namespace:
-                print("\nDataFrame after processing:")
-                print(namespace['df'].head())
-            print("="*50)
+                logging.info("\nDataFrame after processing:")
+                logging.info(namespace['df'].head())
+            logging.info("="*50)
             
             # Verify output file exists
             if not os.path.exists(output_file):
@@ -121,9 +150,8 @@ class DataProcessor:
             }
             
         except Exception as e:
-            print(f"Error processing data with code: {str(e)}")
+            logging.error(f"Error processing data with code: {str(e)}")
             import traceback
-            print("\nFull error traceback:")
-            print(traceback.format_exc())
+            logging.error("\nFull error traceback:")
+            logging.error(traceback.format_exc())
             return None
-
