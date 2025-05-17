@@ -58,43 +58,68 @@ class CMCAPI:
             "Accept": "application/json"
         }
 
-    def get_historical_quotes(self,
-                            symbol: str,
-                            time_start: str = None,
-                            time_end: str = None,
-                            interval: str = "1d",
-                            convert: str = "USD") -> pd.DataFrame:
+    def get_ohlcv(self,
+                  id: str = None,
+                  slug: str = None,
+                  symbol: str = None,
+                  time_period: str = "daily",
+                  time_start: str = None,
+                  time_end: str = None,
+                  count: int = 10,
+                  interval: str = "daily",
+                  convert: str = "USD",
+                  convert_id: str = None,
+                  skip_invalid: bool = True) -> pd.DataFrame:
         """
-        Get historical OHLCV data for a cryptocurrency
+        Get historical OHLCV data for cryptocurrencies
         
         Args:
-            symbol (str): Cryptocurrency symbol (e.g., 'BTC', 'ETH')
+            id (str, optional): One or more comma-separated CoinMarketCap cryptocurrency IDs. Example: "1,1027"
+            slug (str, optional): Alternatively pass a comma-separated list of cryptocurrency slugs. Example: "bitcoin,ethereum"
+            symbol (str, optional): Alternatively pass one or more comma-separated cryptocurrency symbols. Example: "BTC,ETH"
+            time_period (str, optional): Time period to return OHLCV data for. Options: "daily", "hourly". Defaults to "daily"
             time_start (str, optional): Start time in ISO format (e.g., '2023-01-01')
             time_end (str, optional): End time in ISO format (e.g., '2023-12-31')
-            interval (str, optional): Time interval. Options:
-                - Hours: '1h', '2h', '3h', '4h', '6h', '12h'
-                - Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'
-            convert (str, optional): Currency to convert to. Defaults to 'USD'
+            count (int, optional): Limit the number of time periods to return. Defaults to 10, max 10000
+            interval (str, optional): Adjust the interval that time_period is sampled. Options:
+                - Hours: "1h", "2h", "3h", "4h", "6h", "12h"
+                - Days: "1d", "2d", "3d", "7d", "14d", "15d", "30d", "60d", "90d", "365d"
+                - Other: "hourly", "daily", "weekly", "monthly", "yearly"
+            convert (str, optional): Currency to convert to. Defaults to "USD"
+            convert_id (str, optional): Calculate market quotes by CoinMarketCap ID instead of symbol
+            skip_invalid (bool, optional): Skip invalid cryptocurrencies. Defaults to True
             
         Returns:
-            pd.DataFrame: DataFrame containing OHLCV data
+            pd.DataFrame: DataFrame containing OHLCV data with symbol and OHLCV columns
         """
         endpoint = f"{self.base_url}/cryptocurrency/ohlcv/historical"
         
-        # Determine time_period based on interval
-        time_period = "hourly" if interval.endswith("h") else "daily"
-        
+        # Validate required parameters
+        if not any([id, slug, symbol]):
+            raise ValueError("At least one of id, slug, or symbol must be provided")
+            
         params = {
-            "symbol": symbol,
             "time_period": time_period,
             "interval": interval,
-            "convert": convert
+            "count": count,
+            "skip_invalid": str(skip_invalid).lower()
         }
         
+        # Add optional parameters if provided
+        if id:
+            params["id"] = id
+        if slug:
+            params["slug"] = slug
+        if symbol:
+            params["symbol"] = symbol
         if time_start:
             params["time_start"] = time_start
         if time_end:
             params["time_end"] = time_end
+        if convert:
+            params["convert"] = convert
+        if convert_id:
+            params["convert_id"] = convert_id
             
         try:
             print(f"\nMaking request to CMC API:")
@@ -120,22 +145,19 @@ class CMCAPI:
                 print("No data found in response")
                 return pd.DataFrame()
                 
-            # Get the first item from the symbol array
-            symbol_data = data['data'].get(symbol)
-            if not symbol_data or not isinstance(symbol_data, list) or len(symbol_data) == 0:
-                print(f"No data found for symbol {symbol}")
+            # Process the response data
+            all_data = []
+            crypto_data = data['data']
+            
+            if not isinstance(crypto_data, dict):
+                print("Invalid data format")
                 return pd.DataFrame()
                 
-            quotes = symbol_data[0].get('quotes')
+            quotes = crypto_data.get('quotes')
             if not quotes:
                 print("No quotes data found")
                 return pd.DataFrame()
-            
-            # Print the structure of the first quote to understand the data format
-            if quotes and len(quotes) > 0:
-                print("\nFirst quote structure:")
-                print(json.dumps(quotes[0], indent=2))
-            
+                
             # Convert to DataFrame
             df = pd.DataFrame(quotes)
             
@@ -143,26 +165,20 @@ class CMCAPI:
             df['time_open'] = pd.to_datetime(df['time_open'])
             df.set_index('time_open', inplace=True)
             
-            # Extract USD quote data
-            df = pd.json_normalize(df['quote'].apply(lambda x: x['USD']))
+            # Extract quote data
+            quote_currency = list(df['quote'].iloc[0].keys())[0]  # Get the first quote currency
+            df = pd.json_normalize(df['quote'].apply(lambda x: x[quote_currency]))
             
-            # Rename columns to match standard OHLCV format
-            df = df.rename(columns={
-                'open': 'open',
-                'high': 'high',
-                'low': 'low',
-                'close': 'close',
-                'volume': 'volume'
-            })
+            # Add symbol
+            df['symbol'] = crypto_data.get('symbol', '')
             
-            # Reorder columns to match standard OHLCV format
-            df = df[['open', 'high', 'low', 'close', 'volume']]
+            # Reorder columns to only include symbol and OHLCV
+            final_df = df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
             
-            # Print the final DataFrame structure
             print("\nFinal DataFrame structure:")
-            print(df.head())
+            print(final_df.head())
             
-            return df
+            return final_df
             
         except requests.exceptions.RequestException as e:
             print(f"Error fetching data from CMC: {e}")
