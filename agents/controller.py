@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from agents.data_retriever import BitqueryDataRetriever
 from agents.config import get_model_config, ModelConfig
 from agents.visualizer import VisualizerAgent
+from agents.data_processor import DataProcessor
 from datetime import datetime
 import uuid
 
@@ -24,6 +25,7 @@ client = anthropic.Anthropic(api_key=api_key)
 # Initialize agents
 data_retriever = BitqueryDataRetriever()
 visualizer = VisualizerAgent()
+data_processor = DataProcessor()
 
 # Define tools
 tools = [
@@ -61,6 +63,24 @@ tools = [
                 }
             },
             "required": ["query", "task", "file_path"]
+        }
+    },
+    {
+        "name": "process_data",
+        "description": "Process and transform data using Python code",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the input CSV file"
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Description of how to process the data"
+                }
+            },
+            "required": ["file_path", "prompt"]
         }
     }
 ]
@@ -114,6 +134,22 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                 "tool_name": tool_name,
                 "result": result
             }
+        elif tool_name == "process_data":
+            # Process data using DataProcessor
+            result = data_processor.process_with_code(
+                file_path=args["file_path"],
+                prompt=args["prompt"]
+            )
+            if result is not None:
+                return {
+                    "tool_name": tool_name,
+                    "result": result
+                }
+            else:
+                return {
+                    "tool_name": tool_name,
+                    "result": "Failed to process data"
+                }
         else:
             return {
                 "tool_name": tool_name,
