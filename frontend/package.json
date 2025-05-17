@@ -16,6 +16,7 @@
     "@privy-io/react-auth": "^1.0.0",
     "ethers": "^6.13.5",
     "react": "^18.2.0",
+    "react-datepicker": "^4.16.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.5.2",
     "react-markdown": "^10.1.0",
