@@ -1,0 +1,456 @@
+"""
+Plotly 可视化模块
+用于创建交互式图表
+
+支持将图表导出为HTML和JSON格式
+"""
+
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.io as pio
+import os
+import json
+from typing import List, Dict, Any, Optional, Union
+from datetime import datetime
+
+def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optional[str] = None, 
+                        save_path: Optional[str] = None, show: bool = True, 
+                        save_json: Optional[str] = None) -> go.Figure:
+    """
+    使用 Plotly 绘制带有指标的交互式图表
+    
+    参数:
+        df (pandas.DataFrame): 包含 OHLC 数据的 DataFrame
+        indicators (list): 要显示的指标列名列表
+        title (str, optional): 图表标题
+        save_path (str, optional): 保存路径 (HTML 文件)
+        show (bool): 是否显示图表
+        
+    返回:
+        plotly.graph_objects.Figure: Plotly 图表对象
+    """
+    # 验证指标是否存在
+    missing_indicators = [ind for ind in indicators if ind not in df.columns]
+    if missing_indicators:
+        raise ValueError(f"以下指标不存在于数据中: {', '.join(missing_indicators)}")
+    
+    # 检查必要的列是否存在
+    required_columns = ['datetime', 'open', 'high', 'low', 'close', 'volume']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"缺少K线图所需的列: {', '.join(missing_columns)}")
+    
+    # 分类指标
+    signal_indicators = []
+    overlay_indicators = []  # 可以叠加在价格图上的指标
+    separate_indicators = []  # 需要单独显示的指标
+    
+    # 分类指标
+    for ind in indicators:
+        # 判断是否为信号指标
+        if ('signal' in ind.lower() or 'buy' in ind.lower() or 'sell' in ind.lower() or 
+            '信号' in ind or '买入' in ind or '卖出' in ind):
+            signal_indicators.append(ind)
+        elif df[ind].dtype in ['bool', 'int64', 'int32'] and set(df[ind].unique()).issubset({0, 1, True, False}):
+            signal_indicators.append(ind)
+        # 判断是否可以叠加在价格图上
+        elif 'ma' in ind.lower() or 'ema' in ind.lower() or 'sma' in ind.lower() or 'wma' in ind.lower() or \
+             'avg' in ind.lower() or 'mean' in ind.lower() or 'support' in ind.lower() or 'resistance' in ind.lower() or \
+             'trend' in ind.lower() or 'line' in ind.lower() or 'band' in ind.lower() or \
+             '均线' in ind or '支撑' in ind or '压力' in ind or '趋势' in ind:
+            overlay_indicators.append(ind)
+        else:
+            separate_indicators.append(ind)
+    
+    # 不自动添加移动平均线或其他指标
+    # 只显示用户指定的指标
+    
+    # 确定子图数量
+    n_subplots = 3 + len(separate_indicators)  # 价格 + 成交量 + 累计 PNL + 单独指标
+
+    # 创建子图
+    fig = make_subplots(
+        rows=n_subplots, 
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,  # 进一步减小垂直间距
+        subplot_titles=['Price & Indicators', 'Volume', '累计收益率 (%)'] + separate_indicators,
+        row_heights=[0.7, 0.15, 0.15] + [0.15/(len(separate_indicators) or 1)] * len(separate_indicators)  # 调整高度比例，增加价格图比例
+    )
+    
+    # 设置标题
+    if title:
+        chart_title = title
+    else:
+        # 尝试从数据中提取代币信息
+        if 'base_token_symbol' in df.columns and 'quote_token_symbol' in df.columns:
+            base = df['base_token_symbol'].iloc[0] if not pd.isna(df['base_token_symbol'].iloc[0]) else 'Base'
+            quote = df['quote_token_symbol'].iloc[0] if not pd.isna(df['quote_token_symbol'].iloc[0]) else 'Quote'
+            chart_title = f"{base}/{quote} Technical Analysis"
+        else:
+            chart_title = "Technical Analysis"
+
+    # 使用更专业的标题布局
+    fig.update_layout(
+        title={
+            'text': chart_title,
+            'x': 0.01,  # 左对齐
+            'y': 0.98,
+            'xanchor': 'left',
+            'yanchor': 'top',
+            'font': dict(size=16)
+        }
+    )
+    
+    # 添加K线图
+    # 计算涨跌幅 - 使用 .loc 避免 Pandas 警告
+    df.loc[:, 'change_pct'] = ((df['close'] - df['open']) / df['open'] * 100).round(2)
+    
+    # 创建悬停文本 - 动态调整小数位数
+    hover_texts = []
+    
+    # 检测价格范围，动态调整小数位数
+    min_price = df['low'].min()
+    if min_price < 0.0001:
+        hover_decimal_places = 10  # 非常小的单位
+    elif min_price < 0.01:
+        hover_decimal_places = 8   # 很小的单位
+    elif min_price < 1:
+        hover_decimal_places = 6   # 小单位
+    else:
+        hover_decimal_places = 4   # 正常单位
+    
+    for idx, row in df.iterrows():
+        hover_text = f"<b>{row['datetime']}</b><br>"
+        hover_text += f"开盘: {row['open']:.{hover_decimal_places}f}<br>"
+        hover_text += f"最高: {row['high']:.{hover_decimal_places}f}<br>"
+        hover_text += f"最低: {row['low']:.{hover_decimal_places}f}<br>"
+        hover_text += f"收盘: {row['close']:.{hover_decimal_places}f}<br>"
+        hover_text += f"涨跌幅: {row['change_pct']:.2f}%<br>"
+        hover_texts.append(hover_text)
+    
+    fig.add_trace(
+        go.Candlestick(
+            x=df['datetime'],
+            open=df['open'],
+            high=df['high'],
+            low=df['low'],
+            close=df['close'],
+            name='K线',
+            increasing=dict(line=dict(color='#00FFEA', width=1.5), fillcolor='#00FFEA'),  # 青色上涨
+            decreasing=dict(line=dict(color='#FF5252', width=1.5), fillcolor='#FF5252'),  # 红色下跌
+            line=dict(width=1.5),
+            whiskerwidth=0.8,  # 影线宽度
+        ),
+        row=1, col=1
+    )
+    
+    # 处理信号指标
+    for signal_ind in signal_indicators:
+        # 复制数据
+        signal_df = df.copy()
+        
+        # 根据数据类型处理信号
+        if signal_df[signal_ind].dtype in ['int64', 'int32']:
+            buy_signals = signal_df[signal_df[signal_ind] == 1]
+            sell_signals = signal_df[signal_df[signal_ind] == -1] if -1 in signal_df[signal_ind].values else pd.DataFrame()
+        elif signal_df[signal_ind].dtype == 'bool':
+            buy_signals = signal_df[signal_df[signal_ind] == True]
+            sell_signals = pd.DataFrame()  # 布尔型通常只有买入信号
+        else:
+            # 如果是浮点型，尝试使用阈值
+            threshold = 0.5
+            buy_signals = signal_df[signal_df[signal_ind] > threshold]
+            sell_signals = signal_df[signal_df[signal_ind] < -threshold] if signal_df[signal_ind].min() < 0 else pd.DataFrame()
+        
+        # 实现现货交易逻辑：只有买入后才能卖出
+        valid_buy_signals = []
+        valid_sell_signals = []
+        in_position = False
+        entry_price = 0
+        
+        # 按时间排序所有信号
+        all_signals = pd.DataFrame()
+        if not buy_signals.empty:
+            buy_signals['signal_type'] = 'buy'
+            all_signals = pd.concat([all_signals, buy_signals])
+        if not sell_signals.empty:
+            sell_signals['signal_type'] = 'sell'
+            all_signals = pd.concat([all_signals, sell_signals])
+        
+        # 按时间排序
+        if not all_signals.empty:
+            all_signals = all_signals.sort_values('datetime')
+            
+            # 遍历所有信号，模拟交易
+            for idx, row in all_signals.iterrows():
+                if row['signal_type'] == 'buy' and not in_position:
+                    # 买入信号，且当前没有持仓
+                    valid_buy_signals.append(row)
+                    in_position = True
+                    entry_price = row['close']
+                elif row['signal_type'] == 'sell' and in_position:
+                    # 卖出信号，且当前有持仓
+                    valid_sell_signals.append(row)
+                    in_position = False
+        
+        # 将有效信号转换回 DataFrame
+        valid_buy_df = pd.DataFrame(valid_buy_signals) if valid_buy_signals else pd.DataFrame()
+        valid_sell_df = pd.DataFrame(valid_sell_signals) if valid_sell_signals else pd.DataFrame()
+        
+        # 计算信号点的位置 - 在蜡烛图的右侧而不是直接在上面
+        # 使用价格数据的最小值和最大值来计算偏移量
+        price_range = df['high'].max() - df['low'].min()
+        
+        # 根据数据点数量调整偏移因子
+        # 分钟级别数据需要更大的偏移因子以便更明显
+        if len(df) > 200:
+            time_diff = (df['datetime'].iloc[1] - df['datetime'].iloc[0]).total_seconds()
+            if time_diff <= 3600:  # 小于等于1小时
+                offset_factor = 0.01  # 分钟级别的偏移因子更大
+            else:
+                offset_factor = 0.005  # 小时级别
+        else:
+            offset_factor = 0.003  # 天级别数据的默认偏移因子
+        
+        # 创建买入信号的副本，并将位置偏移到右侧上方
+        buy_df_offset = valid_buy_df.copy()
+        buy_df_offset['y_position'] = buy_df_offset['high'] + price_range * offset_factor  # 改为上方
+        
+        # 添加买入信号
+        if not valid_buy_df.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=buy_df_offset['datetime'],
+                    y=buy_df_offset['y_position'],  # 使用偏移后的位置
+                    mode='markers+text',  
+                    name=f'{signal_ind} Buy Signal',
+                    text=['B'] * len(buy_df_offset),  # 简化标记为 B
+                    textposition='middle center',  # 文本在中间
+                    marker=dict(
+                        symbol='circle', 
+                        size=20 if len(df) > 200 else 16,  # 分钟级别数据使用更大的标记
+                        color='#00FFEA',  # 青色圆圈
+                        line=dict(width=2, color='#00FFEA'),  
+                        opacity=1.0
+                    ),
+                    textfont=dict(color='white', size=12 if len(df) > 200 else 10, family='Arial Black')
+                ),
+                row=1, col=1
+            )              # 添加卖出信号
+        if not valid_sell_df.empty:
+            # 创建卖出信号的副本，并将位置偏移到右侧
+            sell_df_offset = valid_sell_df.copy()
+            sell_df_offset['y_position'] = sell_df_offset['high'] + price_range * offset_factor
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=sell_df_offset['datetime'],
+                    y=sell_df_offset['y_position'],  # 使用偏移后的位置
+                    mode='markers+text',  
+                    name=f'{signal_ind} Sell Signal',
+                    text=['S'] * len(sell_df_offset),  # 简化标记为 S
+                    textposition='middle center',  # 文本在中间
+                    marker=dict(
+                        symbol='circle', 
+                        size=20 if len(df) > 200 else 16,  # 分钟级别数据使用更大的标记
+                        color='#FF5252',  # 红色圆圈
+                        line=dict(width=2, color='#FF5252'),  
+                        opacity=1.0
+                    ),
+                    textfont=dict(color='white', size=12 if len(df) > 200 else 10, family='Arial Black')
+                ),
+                row=1, col=1
+            )   
+        
+        # 计算并显示交易统计
+        if not valid_buy_df.empty and not valid_sell_df.empty:
+            # 计算盈利率
+            total_trades = len(valid_sell_df)
+            profitable_trades = sum(valid_sell_df['close'].values > valid_buy_df['close'].values[:len(valid_sell_df)])
+            win_rate = profitable_trades / total_trades * 100 if total_trades > 0 else 0
+            
+            # 计算总收益
+            returns = []
+            buy_sell_pairs = []
+            
+            for i in range(min(len(valid_buy_df), len(valid_sell_df))):
+                buy_price = valid_buy_df.iloc[i]['close']
+                sell_price = valid_sell_df.iloc[i]['close']
+                buy_time = valid_buy_df.iloc[i]['datetime']
+                sell_time = valid_sell_df.iloc[i]['datetime']
+                returns.append((sell_price - buy_price) / buy_price * 100)
+                buy_sell_pairs.append((buy_time, buy_price, sell_time, sell_price))
+            
+            total_return = sum(returns)
+            avg_return = total_return / len(returns) if returns else 0
+            
+            # 计算累计 PNL 曲线
+            df['cumulative_pnl'] = 0.0
+            df['pnl_percentage'] = 0.0
+            has_pnl_data = False
+            
+            # 按时间排序买卖点
+            all_signals = []
+            for i, row in valid_buy_df.iterrows():
+                all_signals.append((row['datetime'], 'buy', row['close']))
+            for i, row in valid_sell_df.iterrows():
+                all_signals.append((row['datetime'], 'sell', row['close']))
+            all_signals.sort(key=lambda x: x[0])
+            
+            # 初始化 PNL 数据
+            pnl_data = []
+            pnl_times = []
+            pnl_values = []
+            pnl_percentages = []
+            initial_investment = 1000  # 假设初始投资1000
+            current_value = initial_investment
+            in_position = False
+            entry_price = 0
+            entry_time = None
+            
+            # 模拟交易，计算每个时间点的账户价值
+            for time, signal_type, price in all_signals:
+                if signal_type == 'buy' and not in_position:
+                    entry_price = price
+                    entry_time = time
+                    in_position = True
+                elif signal_type == 'sell' and in_position:
+                    # 计算这笔交易的收益
+                    profit_pct = (price - entry_price) / entry_price
+                    current_value *= (1 + profit_pct)
+                    pnl_data.append((time, current_value, profit_pct * 100))
+                    in_position = False
+            
+            # 为每个时间点填充 PNL 值
+            if pnl_data:
+                # 将 PNL 数据转换为 DataFrame 以便于处理
+                pnl_df = pd.DataFrame(pnl_data, columns=['time', 'value', 'profit_pct'])
+                
+                # 为原始 DataFrame 中的每个时间点分配 PNL 值
+                last_pnl = 1000
+                last_pct = 0
+                
+                for i, row in df.iterrows():
+                    current_time = row['datetime']
+                    # 找到当前时间之前的最后一个 PNL 值
+                    prev_pnl = pnl_df[pnl_df['time'] <= current_time]
+                    
+                    if not prev_pnl.empty:
+                        last_pnl = prev_pnl.iloc[-1]['value']
+                        last_pct = (last_pnl - 1000) / 1000 * 100
+                    
+                    df.at[i, 'cumulative_pnl'] = last_pnl
+                    df.at[i, 'pnl_percentage'] = last_pct
+            
+            # 添加统计信息到图表中
+            stats_text = f"<b>交易统计</b><br>"
+            stats_text += f"交易次数: <b>{total_trades}</b><br>"
+            stats_text += f"胜率: <b>{win_rate:.2f}%</b><br>"
+            stats_text += f"总收益率: <b>{total_return:.2f}%</b><br>"
+            stats_text += f"平均收益率: <b>{avg_return:.2f}%</b>"
+            if pnl_data:
+                stats_text += f"<br>最终账户价值: <b>{last_pnl:.2f}</b>"
+
+            # 添加注释
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=0.01, y=0.01,
+                text=stats_text,
+                showarrow=False,
+                font=dict(size=12, color='white'),
+                align="left",
+                bgcolor="rgba(30, 30, 30, 0.8)",
+        
+    # 添成交量图
+    # 如果数据点过多，使用更窄的柱子宽度
+    bar_width = None
+    if len(df) > 200:
+        # 对于分钟级别数据，使用更窄的柱子
+        if len(df) > 1:  # 确保有至少两个数据点
+            time_diff = (df['datetime'].iloc[1] - df['datetime'].iloc[0]).total_seconds()
+            if time_diff <= 3600:  # 小于等于1小时
+                bar_width = 0.5  # 窄一点的柱子
+    
+    fig.add_trace(
+        go.Bar(
+            x=df['datetime'],
+            y=df['volume'],
+            name='Volume',
+            width=bar_width,  # 设置柱子宽度
+            marker=dict(
+                color=np.where(df['close'] >= df['open'], '#00FFEA', '#FF5252'),  # 根据K线涨跌设置颜色
+                opacity=0.7
+            )
+        ),
+        row=2, col=1
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(80,80,80,0.8)',  # 暗色轴线
+        tickformat='%b %Y',  # 简化日期格式为 'Jan 2025'
+        nticks=10  # 减少刻度数量
+    )
+
+    # 检测价格范围，动态调整小数位数
+    min_price = df['low'].min()
+    if min_price < 0.0001:
+        decimal_places = 10  # 非常小的单位
+    elif min_price < 0.01:
+        decimal_places = 8   # 很小的单位
+    elif min_price < 1:
+        decimal_places = 6   # 小单位
+    else:
+        decimal_places = 4   # 正常单位
+    
+    # 根据币种单位大小动态调整格式
+    price_format = f'.{decimal_places}f'
+    
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='rgba(80,80,80,0.3)',  # 降低网格线不透明度
+        zeroline=False,
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(80,80,80,0.8)',  # 暗色轴线
+        tickformat=price_format,  # 动态调整小数位数
+        nticks=8  # 减少刻度数量
+    )
+    
+    # 更新 Y 轴标题
+    fig.update_yaxes(title_text="Price", row=1, col=1, title_font=dict(size=10))
+    fig.update_yaxes(title_text="Volume", row=2, col=1, title_font=dict(size=10))
+    for i, ind in enumerate(separate_indicators):
+        fig.update_yaxes(title_text=ind, row=i+3, col=1, title_font=dict(size=10))
+
+    # 更新 X 轴
+    fig.update_xaxes(title_text="Date", row=n_subplots, col=1, title_font=dict(size=10))
+    
+    # 保存图表
+    if save_path:
+        if not save_path.endswith('.html'):
+            save_path += '.html'
+        fig.write_html(save_path)
+        print(f"交互式图表已保存到 {save_path}")
+    
+    # 将图表导出为JSON
+    if save_json:
+        if not save_json.endswith('.json'):
+            save_json += '.json'
+        
+        # 将图表转换为JSON
+        fig_json = fig.to_json()
+        
+        # 保存JSON文件
+        with open(save_json, 'w', encoding='utf-8') as f:
+            f.write(fig_json)
+        
+        print(f"图表JSON已保存到 {save_json}")
+    
+    # 显示图表
+    if show:
+        fig.show()
+    
+    return fig
