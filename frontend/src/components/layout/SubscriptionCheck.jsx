@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { checkSubscription, subscribe } from '../../utils/contracts';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { showTransactionNotification } from '../../utils/notifications';
@@ -117,7 +117,7 @@ const SubscriptionCheck = ({ onSubscriptionStatus }) => {
   if (isLoading) {
     return (
       <button 
-        className="px-4 py-2 bg-gray-100 text-gray-400 rounded-lg animate-pulse"
+        className="px-4 py-2 bg-gray-100 text-gray-400 rounded-lg animate-pulse min-w-[250px]"
         disabled
       >
         Checking subscription...
@@ -130,7 +130,7 @@ const SubscriptionCheck = ({ onSubscriptionStatus }) => {
       <div className="flex items-center space-x-2">
         <button
           onClick={handleSubscribe}
-          className={`px-4 py-2 bg-primary-main text-black rounded-lg hover:bg-primary-hover transition-colors duration-200 font-medium disabled:bg-gray-300`}
+          className={`min-w-[160px] px-6 py-2 bg-primary-main text-black rounded-lg hover:bg-primary-hover transition-colors duration-200 font-medium disabled:bg-gray-300`}
           disabled={isLoading}
         >
           {isLoading ? 'Processing...' : 'Subscribe Now'}
@@ -164,7 +164,7 @@ const SubscriptionCheck = ({ onSubscriptionStatus }) => {
     return (
       <div className="flex items-center space-x-2">
         <div className="px-3 py-1 text-green-800 rounded-lg text-sm">
-          <div className="flex items-center">
+          <div className="flex items-center min-w-[180px]">
             <svg className="w-4 h-4 mr-1.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
