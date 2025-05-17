@@ -92,7 +92,12 @@ tools = [
             "properties": {
                 "symbol": {
                     "type": "string",
-                    "description": "Cryptocurrency symbol (e.g., 'BTC', 'ETH')"
+                    "description": "Alternatively pass one or more comma-separated cryptocurrency symbols. Example: 'BTC,ETH'"
+                },
+                "time_period": {
+                    "type": "string",
+                    "description": "Time period to return OHLCV data for. Options: 'daily', 'hourly'",
+                    "default": "daily"
                 },
                 "time_start": {
                     "type": "string",
@@ -102,10 +107,15 @@ tools = [
                     "type": "string",
                     "description": "End time in ISO format (e.g., '2023-12-31')"
                 },
+                "count": {
+                    "type": "integer",
+                    "description": "Limit the number of time periods to return. Defaults to 10, max 10000",
+                    "default": 10
+                },
                 "interval": {
                     "type": "string",
-                    "description": "Time interval. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'",
-                    "default": "1d"
+                    "description": "Adjust the interval that time_period is sampled. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'; Other: 'hourly', 'daily', 'weekly', 'monthly', 'yearly'",
+                    "default": "daily"
                 },
                 "convert": {
                     "type": "string",
