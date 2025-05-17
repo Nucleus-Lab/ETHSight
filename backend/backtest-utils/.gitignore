@@ -1,0 +1,46 @@
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 数据文件
+data/**/*.csv
+data/**/*.json
+data/**/*.parquet
+data/**/*.feather
+
+# 图表和输出文件
+charts/**/*.png
+charts/**/*.jpg
+charts/**/*.jpeg
+charts/**/*.pdf
+results/**/*.png
+results/**/*.csv
+
+# 缓存和临时文件
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+.DS_Store
+
+# 日志文件
+*.log
+logs/
+
+# 环境变量文件
+.env
+.env.local
+
+# 大文件 (>1MB)
+# 特别是已发现的大文件
+data/geckoterminal_data.db
+data/eth/**/*.csv
+
+# 保留目录结构但忽略内容
+# 保留以下空目录
+!data/.gitkeep
+!data/eth/.gitkeep
+!charts/.gitkeep
+!results/.gitkeep
+!indicators/.gitkeep
