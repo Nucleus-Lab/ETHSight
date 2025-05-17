@@ -147,33 +147,39 @@ class CMCAPI:
                 
             # Process the response data
             all_data = []
-            crypto_data = data['data']
+            for symbol, crypto_list in data['data'].items():
+                if not isinstance(crypto_list, list) or len(crypto_list) == 0:
+                    continue
+                    
+                crypto_data = crypto_list[0]  # Get the first item from the list
+                quotes = crypto_data.get('quotes')
+                if not quotes:
+                    continue
+                    
+                # Convert to DataFrame
+                df = pd.DataFrame(quotes)
+                
+                # Convert timestamp to datetime
+                df['time_open'] = pd.to_datetime(df['time_open'])
+                df.set_index('time_open', inplace=True)
+                
+                # Extract quote data
+                quote_currency = list(df['quote'].iloc[0].keys())[0]  # Get the first quote currency
+                df = pd.json_normalize(df['quote'].apply(lambda x: x[quote_currency]))
+                
+                # Add symbol
+                df['symbol'] = symbol
+                
+                all_data.append(df)
             
-            if not isinstance(crypto_data, dict):
-                print("Invalid data format")
+            if not all_data:
                 return pd.DataFrame()
                 
-            quotes = crypto_data.get('quotes')
-            if not quotes:
-                print("No quotes data found")
-                return pd.DataFrame()
-                
-            # Convert to DataFrame
-            df = pd.DataFrame(quotes)
-            
-            # Convert timestamp to datetime
-            df['time_open'] = pd.to_datetime(df['time_open'])
-            df.set_index('time_open', inplace=True)
-            
-            # Extract quote data
-            quote_currency = list(df['quote'].iloc[0].keys())[0]  # Get the first quote currency
-            df = pd.json_normalize(df['quote'].apply(lambda x: x[quote_currency]))
-            
-            # Add symbol
-            df['symbol'] = crypto_data.get('symbol', '')
+            # Combine all data
+            final_df = pd.concat(all_data, axis=0)
             
             # Reorder columns to only include symbol and OHLCV
-            final_df = df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
+            final_df = final_df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
             
             print("\nFinal DataFrame structure:")
             print(final_df.head())
