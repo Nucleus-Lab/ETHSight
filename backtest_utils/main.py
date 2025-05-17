@@ -7,18 +7,22 @@ GeckoTerminal 链上数据回溯系统
 import os
 import sys
 import argparse
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from datetime import datetime
 
-from geckoterminal_backtracker.api.gecko_api import GeckoTerminalAPI
 from geckoterminal_backtracker.storage.csv_storage import CSVStorage
 from geckoterminal_backtracker.storage.sqlite_storage import SQLiteStorage
+from geckoterminal_backtracker.api.gecko_api import GeckoTerminalAPI
 from geckoterminal_backtracker.utils.data_fetcher import OHLCDataFetcher
 from geckoterminal_backtracker.analysis.analyzer import OHLCAnalyzer
 from geckoterminal_backtracker.analysis.ai_indicator_runner import generate_ai_indicator
-from geckoterminal_backtracker.analysis.indicator_manager import list_indicators, print_indicators_table, use_indicator, find_indicator_file
+from geckoterminal_backtracker.analysis.indicator_backtester import (
+    find_indicator_file, use_indicator, backtest_indicators, 
+    calculate_trading_stats, plot_backtest_results, resample_ohlc
+)
+from geckoterminal_backtracker.analysis.indicator_manager import list_indicators, print_indicators_table
 
 
 def setup_argparse():
@@ -40,21 +44,12 @@ def setup_argparse():
     
     # AI 指标生成命令
     ai_parser = subparsers.add_parser('ai-indicator', help='使用自然语言生成技术指标')
-    ai_parser.add_argument('--network', required=True, help='网络 ID，例如 eth, bsc')
-    ai_parser.add_argument('--pool', required=True, help='池子地址')
-    ai_parser.add_argument('--timeframe', default='day', choices=['day', 'hour', 'minute'], help='时间周期')
-    ai_parser.add_argument('--aggregate', type=int, default=1, help='聚合周期')
-    ai_parser.add_argument('--storage', default='sqlite', choices=['csv', 'sqlite'], help='存储类型')
-    ai_parser.add_argument('--data-dir', default='data', help='数据目录')
     ai_parser.add_argument('--description', required=True, help='指标的自然语言描述')
     ai_parser.add_argument('--name', required=True, help='指标名称')
     ai_parser.add_argument('--save', action='store_true', help='保存生成的指标代码')
     ai_parser.add_argument('--output-dir', default='indicators', help='指标代码保存目录')
     ai_parser.add_argument('--api-key', help='OpenAI API 密钥，如果不提供将使用环境变量 OPENAI_API_KEY')
     ai_parser.add_argument('--model', default='gpt-4o', help='要使用的 OpenAI 模型')
-    ai_parser.add_argument('--plot', action='store_true', help='绘制并显示图表')
-    ai_parser.add_argument('--save-chart', action='store_true', help='保存图表')
-    ai_parser.add_argument('--chart-dir', default='charts', help='图表保存目录')
     
     # 搜索池子命令
     search_parser = subparsers.add_parser('search', help='搜索池子')
@@ -73,13 +68,19 @@ def setup_argparse():
     use_indicator_parser.add_argument('--pool', required=True, help='池子地址')
     use_indicator_parser.add_argument('--timeframe', default='day', choices=['day', 'hour', 'minute'], help='时间周期')
     use_indicator_parser.add_argument('--aggregate', type=int, default=1, help='聚合周期')
-    use_indicator_parser.add_argument('--indicator', required=True, help='指标名称或文件名')
+    use_indicator_parser.add_argument('--indicator', required=True, help='指标名称或文件名，用于买入信号')
+    use_indicator_parser.add_argument('--sell-indicator', help='用于卖出信号的指标名称或文件名，如果不指定则使用同一个指标')
+    use_indicator_parser.add_argument('--buy-column', help='买入信号列名，如果不指定则自动识别')
+    use_indicator_parser.add_argument('--sell-column', help='卖出信号列名，如果不指定则自动识别')
     use_indicator_parser.add_argument('--indicators-dir', default='indicators', help='指标代码目录')
     use_indicator_parser.add_argument('--storage', default='sqlite', choices=['csv', 'sqlite'], help='存储类型')
     use_indicator_parser.add_argument('--data-dir', default='data', help='数据目录')
     use_indicator_parser.add_argument('--plot', action='store_true', help='绘制并显示图表')
     use_indicator_parser.add_argument('--save-chart', action='store_true', help='保存图表')
     use_indicator_parser.add_argument('--chart-dir', default='charts', help='图表保存目录')
+    use_indicator_parser.add_argument('--save-json', action='store_true', help='保存图表为 JSON 格式')
+    use_indicator_parser.add_argument('--json-dir', default='json_charts', help='JSON 图表保存目录')
+    use_indicator_parser.add_argument('--resample', help='重新采样数据的时间周期，例如 15min, 1h, 4h, 1d 等')
     
     # 列出已存储数据命令
     list_parser = subparsers.add_parser('list', help='列出已存储的数据')
@@ -129,9 +130,6 @@ def fetch_data(args):
     print(f"最低价: {df['low'].min()}")
     print(f"总成交量: {df['volume'].sum()}")
     print(f"平均成交量: {df['volume'].mean()}")
-
-
-# 分析相关函数已删除
 
 
 def search_pools(args):
@@ -247,6 +245,7 @@ def list_indicators_cmd(args):
                 print(f"\n代码:\n{ind.get('code', '')}")
                 print(f"\n{'-' * 80}")
 
+
 def use_indicator_cmd(args):
     """
     使用已保存的指标
@@ -275,16 +274,88 @@ def use_indicator_cmd(args):
         if df.empty:
             print(f"错误: 找不到数据。请先使用 'fetch' 命令获取数据")
             return
+            
+        # 如果是分钟级数据且数据量过大，自动采样或使用用户指定的时间周期重新采样
+        if args.timeframe == 'minute' and len(df) > 1000:
+            if args.resample:
+                # 使用用户指定的时间周期重新采样
+                original_len = len(df)
+                df = resample_ohlc(df, args.resample)
+                print(f"数据已重新采样为 {args.resample} 周期，从 {original_len} 个数据点减少到 {len(df)} 个")
+            else:
+                # 根据数据量自动选择采样周期
+                original_len = len(df)
+                if len(df) > 10000:
+                    df = resample_ohlc(df, '4h')
+                    print(f"数据量过大，已自动采样为 4小时周期，从 {original_len} 个数据点减少到 {len(df)} 个")
+                elif len(df) > 5000:
+                    df = resample_ohlc(df, '1h')
+                    print(f"数据量过大，已自动采样为 1小时周期，从 {original_len} 个数据点减少到 {len(df)} 个")
+                elif len(df) > 1000:
+                    df = resample_ohlc(df, '15min')
+                    print(f"数据量过大，已自动采样为 15分钟周期，从 {original_len} 个数据点减少到 {len(df)} 个")
     except Exception as e:
         print(f"加载数据时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return
     
-    # 应用指标
+    # 应用指标并回测
     try:
-        result_df, indicator_info = use_indicator(df, args.indicator, args.indicators_dir)
-        print(f"成功应用指标: {indicator_info['name']}")
-        print(f"描述: {indicator_info['description']}")
-        print(f"新增列: {', '.join(indicator_info['new_columns'])}")
+        # 使用 backtest_indicators 函数进行回测
+        result_df, buy_indicator_info, sell_indicator_info, stats, buy_signal_columns, sell_signal_columns = backtest_indicators(
+            df, 
+            args.indicator, 
+            args.sell_indicator, 
+            args.buy_column, 
+            args.sell_column, 
+            args.indicators_dir
+        )
+        
+        # 显示指标信息
+        print(f"成功应用买入指标: {buy_indicator_info['name']}")
+        print(f"描述: {buy_indicator_info['description']}")
+        print(f"新增列: {', '.join(buy_indicator_info['new_columns'])}")
+        
+        if sell_indicator_info:
+            print(f"\n成功应用卖出指标: {sell_indicator_info['name']}")
+            print(f"描述: {sell_indicator_info['description']}")
+            print(f"新增列: {', '.join(sell_indicator_info['new_columns'])}")
+        
+        # 显示信号列信息
+        print(f"\n使用的买入信号列: {buy_signal_columns if buy_signal_columns else '未找到'}")
+        print(f"使用的卖出信号列: {sell_signal_columns if sell_signal_columns else '未找到'}")
+        
+        # 显示交易统计信息
+        if stats['has_signals']:
+            print("\n交易统计:")
+            print(f"交易次数: {stats['total_trades']}")
+            print(f"盈利交易: {stats['profitable_trades']}")
+            print(f"胜率: {stats['win_rate']:.2f}%")
+            print(f"总收益率: {stats['total_return']:.2f}%")
+            print(f"平均收益率: {stats['avg_return']:.2f}%")
+            
+            # 显示每笔交易详情
+            if stats['trades']:
+                print("\n交易详情:")
+                print("{:<20} {:<20} {:<10} {:<10} {}".format("买入时间", "卖出时间", "买入价格", "卖出价格", "收益率"))
+                for trade in stats['trades']:
+                    buy_time = trade['buy_time']
+                    sell_time = trade['sell_time']
+                    buy_price = trade['buy_price']
+                    sell_price = trade['sell_price']
+                    profit = trade['profit']
+                    profit_str = f"{profit:.2f}%" if profit >= 0 else f"{profit:.2f}%"
+                    print("{:<20} {:<20} {:<10.6f} {:<10.6f} {}".format(
+                        buy_time.strftime("%Y-%m-%d %H:%M"), 
+                        sell_time.strftime("%Y-%m-%d %H:%M"),
+                        buy_price, 
+                        sell_price,
+                        profit_str
+                    ))
+        else:
+            print("\n未检测到有效的交易信号对")
+    
     except Exception as e:
         print(f"应用指标时出错: {str(e)}")
         import traceback
@@ -293,42 +364,54 @@ def use_indicator_cmd(args):
     
     # 绘制图表
     if args.plot or args.save_chart:
-        analyzer = OHLCAnalyzer(result_df)
-        
-        # 提取信号列
-        signal_columns = [col for col in result_df.columns if 'signal' in col.lower()]
-        signal_indicators = []
-        
-        for col in signal_columns:
-            if 'buy' in col.lower() or 'sell' in col.lower():
-                signal_type = 'buy' if 'buy' in col.lower() else 'sell'
-                signal_indicators.append({
-                    'name': indicator_info['name'],
-                    'column': col,
-                    'signal_type': signal_type
-                })
-        
-        # 如果没有明确的信号列，尝试使用所有新增列
-        if not signal_indicators:
-            for col in indicator_info['new_columns']:
-                signal_indicators.append({
-                    'name': indicator_info['name'],
-                    'column': col,
-                    'signal_type': 'indicator'
-                })
-        
-        # 绘制图表
+        # 准备保存路径
         chart_path = None
         if args.save_chart:
             os.makedirs(args.chart_dir, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            chart_name = f"{args.network}_{args.pool}_{indicator_info['name'].replace(' ', '_')}_{timestamp}.png"
+            
+            # 生成图表名称
+            if sell_indicator_info:
+                chart_name = f"{args.network}_{args.pool}_{buy_indicator_info['name']}_and_{sell_indicator_info['name']}_{timestamp}.png"
+            else:
+                chart_name = f"{args.network}_{args.pool}_{buy_indicator_info['name']}_{timestamp}.png"
+                
             chart_path = os.path.join(args.chart_dir, chart_name)
         
-        analyzer.plot_with_indicators(
-            indicator_info['new_columns'],
-            title=f"{indicator_info['name']} - {args.network.upper()} {args.pool}",
-            save_path=chart_path
+        # 生成图表标题
+        if sell_indicator_info:
+            title = f"{buy_indicator_info['name']} (买入) + {sell_indicator_info['name']} (卖出) - {args.network.upper()} {args.pool}"
+        else:
+            title = f"{buy_indicator_info['name']} - {args.network.upper()} {args.pool}"
+        
+        # 准备 JSON 保存路径
+        json_path = None
+        if args.save_json:
+            os.makedirs(args.json_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # 生成 JSON 文件名
+            if sell_indicator_info:
+                json_name = f"{args.network}_{args.pool}_{buy_indicator_info['name']}_and_{sell_indicator_info['name']}_{timestamp}.json"
+            else:
+                json_name = f"{args.network}_{args.pool}_{buy_indicator_info['name']}_{timestamp}.json"
+                
+            json_path = os.path.join(args.json_dir, json_name)
+        
+        # 使用 plot_backtest_results 函数绘制图表
+        fig = plot_backtest_results(
+            result_df, 
+            buy_indicator_info, 
+            sell_indicator_info, 
+            buy_signal_columns, 
+            sell_signal_columns,
+            title=title,
+            save_path=chart_path,
+            save_json=json_path,
+            network=args.network,
+            pool=args.pool,
+            timeframe=args.timeframe,
+            aggregate=args.aggregate
         )
         
         # 如果设置了 plot 参数但没有设置 save_path，显示图表

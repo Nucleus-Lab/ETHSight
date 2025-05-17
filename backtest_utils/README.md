@@ -74,23 +74,39 @@ python main.py fetch --network eth --pool 0x60594a405d53811d3bc4766596efd80fd545
 ### 使用 AI 生成技术指标
 
 ```bash
-python main.py ai-indicator --network eth --pool 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640 --description "创建一个指标，当价格突破20日均线且成交量增加50%时发出买入信号，当价格跌破均线时发出卖出信号" --name "均线突破信号" --plot --save
+python main.py ai-indicator --description "创建一个指标，当价格突破20日均线且成交量增加50%时发出买入信号，当价格跌破均线时发出卖出信号" --name "均线突破信号" --save
+```
+
+参数说明:
+- `--description`: 指标的自然语言描述（可以使用中文或英文）
+- `--name`: 指标名称
+- `--save`: 保存生成的指标代码
+- `--output-dir`: 指标代码保存目录，默认为 indicators
+- `--api-key`: OpenAI API 密钥（也可以通过环境变量 OPENAI_API_KEY 设置）
+- `--model`: 要使用的 OpenAI 模型，默认为 gpt-4o
+
+> 注意: 此命令现在只负责生成指标代码，不会加载数据或绘制图表。要应用指标并查看图表，请使用 `use-indicator` 命令。
+
+### 使用已生成的指标进行回测
+
+```bash
+python main.py use-indicator --network eth --pool 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640 --indicator "均线突破信号" --plot
 ```
 
 参数说明:
 - `--network`: 网络 ID，例如 eth, bsc
 - `--pool`: 池子地址
-- `--timeframe`: 时间周期（day/hour/minute），默认为 day
+- `--indicator`: 指标名称或文件名，用于买入信号
+- `--sell-indicator`: 用于卖出信号的指标名称或文件名（可选）
+- `--buy-column`: 买入信号列名（可选）
+- `--sell-column`: 卖出信号列名（可选）
+- `--timeframe`: 时间周期，默认为 day
 - `--aggregate`: 聚合周期，默认为 1
-- `--description`: 指标的自然语言描述（可以使用中文或英文）
-- `--name`: 指标名称
-- `--api-key`: OpenAI API 密钥（也可以通过环境变量 OPENAI_API_KEY 设置）
-- `--model`: 要使用的 OpenAI 模型，默认为 gpt-4o
 - `--plot`: 绘制并显示图表
-- `--save`: 保存生成的指标代码
-- `--output-dir`: 指标代码保存目录，默认为 indicators
 - `--save-chart`: 保存图表
 - `--chart-dir`: 图表保存目录，默认为 charts
+
+> 注意: 此命令现在支持同时使用两个不同的指标，一个作为买入信号，一个作为卖出信号。图表中将显示累计 PNL 曲线。
 
 #### AI 指标生成示例
 

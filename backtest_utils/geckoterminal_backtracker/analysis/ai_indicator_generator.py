@@ -100,6 +100,30 @@ class AIIndicatorGenerator:
 6. 代码应该高效且易于理解
 7. 只返回 Python 代码，不要包含任何其他解释
 
+交易信号生成规则（非常重要）:
+1. 必须创建名为 'buy_signal' 的列来生成买入信号，值为 1 表示买入信号，值为 0 表示无信号
+2. 必须创建名为 'sell_signal' 的列来生成卖出信号，值为 1 表示卖出信号，值为 0 表示无信号
+3. 如果你的指标只生成买入信号，仍然需要创建空的 'sell_signal' 列（全部为 0）
+4. 如果你的指标只生成卖出信号，仍然需要创建空的 'buy_signal' 列（全郦为 0）
+5. 信号列的数据类型必须为整数（int），不要使用布尔值或浮点数
+
+示例（买卖信号生成）:
+```python
+# 生成买入信号
+# 当满足某些条件时，设置买入信号为 1
+# 例如：当 RSI < 30 且成交量增加时
+
+df['buy_signal'] = 0  # 初始化买入信号列为 0
+df.loc[(df['rsi'] < 30) & (df['volume_change'] > 0.1), 'buy_signal'] = 1
+
+# 生成卖出信号
+# 当满足某些条件时，设置卖出信号为 1
+# 例如：当 RSI > 70 且成交量下降时
+
+df['sell_signal'] = 0  # 初始化卖出信号列为 0
+df.loc[(df['rsi'] > 70) & (df['volume_change'] < -0.1), 'sell_signal'] = 1
+```
+
 示例函数格式:
 ```python
 def calculate_indicator(df):
