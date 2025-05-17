@@ -91,7 +91,10 @@ const Signals = () => {
                 ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Signal Definition
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Created
@@ -107,8 +110,11 @@ const Signals = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {signal.signal_id}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {signal.signal_name}
+                </td>
                 <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-500 max-w-md">
-                  {signal.signal_definition}
+                  {signal.signal_description}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(signal.created_at).toLocaleString()}

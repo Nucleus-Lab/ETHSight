@@ -12,12 +12,12 @@ class ModelConfig(str, Enum):
 # Configuration for different LLM models
 LLM_CONFIGS: Dict[ModelConfig, Dict[str, Any]] = {
     ModelConfig.HAIKU: {
-        "model_name": "haiku",
+        "model_name": "claude-3-5-haiku-20241022",
         "api_key": os.getenv("ANTHROPIC_API_KEY"),
         "base_url": os.getenv("ANTHROPIC_BASE_URL"),
     },
     ModelConfig.SONNET: {
-        "model_name": "sonnet",
+        "model_name": "claude-3-7-sonnet-20250219",
         "api_key": os.getenv("ANTHROPIC_API_KEY"),
         "base_url": os.getenv("ANTHROPIC_BASE_URL"),
     },

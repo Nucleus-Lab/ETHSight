@@ -59,7 +59,7 @@ pip install -r requirements.txt
 ### 获取 OHLC 数据
 
 ```bash
-python main.py fetch --network eth --pool 0x60594a405d53811d3bc4766596efd80fd545a270 --timeframe day --aggregate 1 --days 180
+python main.py fetch --network eth --pool 0x60594a405d53811d3bc4766596efd80fd545a270 --timeframe day --aggregate 1 --days 7
 ```
 
 参数说明：

@@ -313,3 +313,55 @@ export const createSignal = async (signalData) => {
     throw error;
   }
 };
+
+// Run backtest with a strategy
+export const runBacktest = async (strategy) => {
+  try {
+    console.log('Running backtest with strategy:', strategy);
+    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/backtest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(strategy)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to run backtest');
+    }
+    
+    const data = await response.json();
+    console.log('Backtest results:', data);
+    return data;
+  } catch (error) {
+    console.error('Error running backtest:', error);
+    throw error;
+  }
+};
+
+// Execute a trade with a strategy
+export const executeTrade = async (strategy) => {
+  try {
+    console.log('Executing trade with strategy:', strategy);
+    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/trade`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(strategy)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to execute trade');
+    }
+    
+    const data = await response.json();
+    console.log('Trade execution results:', data);
+    return data;
+  } catch (error) {
+    console.error('Error executing trade:', error);
+    throw error;
+  }
+};

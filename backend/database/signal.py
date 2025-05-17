@@ -3,11 +3,12 @@ from datetime import datetime
 from backend.database.models import SignalDB, CanvasDB, UserDB
 
 # Create a new signal
-def create_signal(db, canvas_id: int, signal_definition: str) -> SignalDB:
+def create_signal(db, canvas_id: int, signal_name: str, signal_description: str) -> SignalDB:
     """Create a new signal in the database"""
     new_signal = SignalDB(
         canvas_id=canvas_id,
-        signal_definition=signal_definition,
+        signal_name=signal_name,
+        signal_description=signal_description,
         created_at=datetime.utcnow()
     )
     db.add(new_signal)
@@ -38,13 +39,14 @@ def get_all_signals(db) -> List[SignalDB]:
         .all()
 
 # Update a signal
-def update_signal(db, signal_id: int, signal_definition: str) -> Optional[SignalDB]:
+def update_signal(db, signal_id: int, signal_name: str, signal_description: str) -> Optional[SignalDB]:
     """Update an existing signal"""
     signal = db.query(SignalDB).filter(SignalDB.signal_id == signal_id).first()
     if not signal:
         return None
     
-    signal.signal_definition = signal_definition
+    signal.signal_name = signal_name
+    signal.signal_description = signal_description
     db.commit()
     db.refresh(signal)
     return signal

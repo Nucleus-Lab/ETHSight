@@ -7,186 +7,8 @@ import pandas as pd
 import json
 import uuid
 from pathlib import Path
+from agents.prompt import GRAPHQL_RULES
 
-
-TABLE_CONTEXT = """
-{
-  "DEXTradeByTokens": {
-    "limit": {
-      "count": "int",
-      "offset": "int"
-    },
-    "limitBy": {
-      "by": null,
-      "count": null,
-      "offset": null
-    },
-    "orderBy": {
-      "ascending": null,
-      "ascendingByField": "string",
-      "descending": null,
-      "descendingByField": null
-    },
-    "where": {
-      "Block": {
-        "BaseFee": {
-          "eq": null,
-          "ge": null,
-          "gt": null,
-          "in": null,
-          "le": null,
-          "lt": null,
-          "ne": null,
-          "notIn": null
-        },
-        "Coinbase": null,
-        "Date": null,
-        "Difficulty": null,
-        "GasLimit": null,
-        "GasUsed": null,
-        "Hash": null,
-        "L1": null,
-        "Nonce": null,
-        "Number": null,
-        "ParentHash": null,
-        "Time": {
-            "since": "DateTime"
-        }
-      },
-      "Call": {
-        "CallData": null,
-        "CallDataLength": null,
-        "Caller": null,
-        "Gas": null,
-        "GasUsed": null,
-        "Index": null,
-        "Input": null,
-        "Output": null,
-        "Success": null,
-        "Type": null,
-        "Value": null
-      },
-      "ChainId": null,
-      "Fee": {
-        "Amount": null,
-        "Currency": null,
-        "GasPrice": null,
-        "GasUsed": null,
-        "Value": null
-      },
-      "Log": {
-        "Address": null,
-        "Data": null,
-        "Index": null,
-        "Topics": null
-      },
-      "Receipt": {
-        "CumulativeGasUsed": null,
-        "GasUsed": null,
-        "LogsBloom": null,
-        "Status": null
-      },
-      "Trade": {
-        "Amount": null,
-        "Buyer": null,
-        "Currency": {
-            "SmartContract": {
-                "is": "string",
-                "includes": "string"
-            }
-        },
-        "DEX": {
-            "ProtocolFamily": {
-                "is": "string"
-            },
-            "ProtocolName": {
-                "is": "string",
-                "includes": "string"
-            }
-        },
-        "Price": null,
-        "Seller": null,
-        "Token": null,
-        "Value": null
-      }
-    },
-    "Trade": {
-        "Amount": null,
-        "Buyer": null,
-        "Currency": {
-            "SmartContract": {
-                "is": "string",
-                "includes": "string"
-            }
-        },
-        "DEX": {
-            "ProtocolFamily": {
-                "is": "string"
-            },
-            "ProtocolName": {
-                "is": "string",
-                "includes": "string"
-            }
-        },
-        "Price": null,
-        "Seller": null,
-        "Token": null,
-        "Value": null
-    },
-    "Transaction": {
-        "From": null,
-        "Gas": null,
-        "GasPrice": null,
-        "Hash": null,
-        "Input": null,
-        "Nonce": null,
-        "To": null,
-        "Value": null
-      },
-      "TransactionStatus": {
-        "Status": null
-      },
-      "any": null,
-      "sum": {
-        "if": "bool_expr",
-        "of": "string"
-    },
-    "count": null
-  },
-  "Transfers": {
-    "where": {
-        "Transfer": {
-            "Currency": {
-                "SmartContract": {
-                    "is": "string",
-                    "includes": "string"
-                }
-            },
-            "Receiver": {
-                "is": "string"
-            },
-            "Success": "bool"
-        }
-    },
-    "sum": {
-        "of": "string",
-        "if": "bool_expr"
-    },
-    "Transfer": {
-        "Currency": {
-            "SmartContract": {
-                "is": "string",
-                "includes": "string"
-            }
-        },
-        "Receiver": {
-            "is": "string"
-        },
-        "Success": "bool"
-    }
-  }
-} 
-"""
 
 class GraphQLQuery(dspy.Signature):
     """You are an expert in Bitquery GraphQL. The user is asking for specific data about Uniswap tokens, and you need to write a GraphQL query to retrieve the data from the Bitquery.
@@ -283,12 +105,13 @@ class BitqueryDataRetriever():
         
         return [self._flatten_dict(data)]
     
-    def convert_to_csv(self, data: dict):
+    def convert_to_csv(self, data: dict, output_file: str):
         """
         Convert nested Bitquery data to CSV format
         
         Args:
             data (dict): Raw data from Bitquery API
+            output_file (str): Path to save the CSV file
             
         Returns:
             pd.DataFrame: DataFrame containing the flattened data
@@ -304,11 +127,6 @@ class BitqueryDataRetriever():
             # Convert to DataFrame
             df = pd.DataFrame(flattened_data)
             
-            # Generate unique filename with UUID
-            file_id = str(uuid.uuid4())
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = self.data_dir / f"bitquery_data_{timestamp}_{file_id}.csv"
-            
             # Save to CSV
             df.to_csv(output_file, index=False)
             print(f"Data saved to {output_file}")
@@ -319,20 +137,33 @@ class BitqueryDataRetriever():
             print(f"Error converting data to CSV: {e}")
             return None
     
-    def get_data(self, query: str):
+    
+    def get_data(self, query: str = None, graphql_query: str = None):
         # Get current time in UTC with proper format
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         
-        query = self.generate_query(
-            query=query,
-            current_time=current_time,
-            table_context=TABLE_CONTEXT
-        ).graphql_query
+        if graphql_query is None:
+            graphql_query = self.generate_query(
+                query=query,
+                current_time=current_time,
+                table_context=GRAPHQL_RULES
+            ).graphql_query
         
-        print(query)
-        data = self.BitqueryAPI.request(query=query)
+        print(graphql_query)
+        data = self.BitqueryAPI.request(query=graphql_query)
         if data:
-            return self.convert_to_csv(data)
+            # Generate unique filename with UUID
+            file_id = str(uuid.uuid4())
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_path = str(self.data_dir / f"bitquery_data_{timestamp}_{file_id}.csv")
+            
+            df = self.convert_to_csv(data, file_path)
+            if df is not None:
+                return {
+                    "file_path": file_path,
+                    "df_head": df.head().to_string(),
+                    "description": "Data retrieved from Bitquery"
+                }
         return None
     
 

@@ -4,11 +4,12 @@ import StrategyList from './StrategyList';
 import { useChatContext } from '../../contexts/ChatContext';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
-const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies }) => {
+const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null }) => {
   const { isChatOpen, setIsChatOpen } = useChatContext();
 
   console.log('BacktestTabContent - Active tab:', activeTab);
   console.log('BacktestTabContent - Active strategies:', activeStrategies);
+  console.log('BacktestTabContent - Last results:', lastResults);
 
   const tabs = [
     { id: 'results', label: 'Results' },
@@ -25,6 +26,7 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
             <BacktestResults 
               strategyIds={activeStrategies} 
               setActiveStrategies={setActiveStrategies}
+              lastResults={lastResults}
             />
           </div>
         );
