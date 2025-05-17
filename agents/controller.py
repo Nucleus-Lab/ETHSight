@@ -205,11 +205,13 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                     "result": "CMC_API_KEY not found in environment variables"
                 }
             cmc = CMCAPI(api_key=api_key)
-            df = cmc.get_historical_quotes(
+            df = cmc.get_ohlcv(
                 symbol=args["symbol"],
+                time_period=args.get("time_period", "daily"),
                 time_start=args.get("time_start"),
                 time_end=args.get("time_end"),
-                interval=args.get("interval", "1d"),
+                count=args.get("count", 10),
+                interval=args.get("interval", "daily"),
                 convert=args.get("convert", "USD")
             )
             if df is not None and not df.empty:
