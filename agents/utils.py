@@ -7,20 +7,32 @@ import os
 class BitqueryAPI:
     def __init__(self, api_key):
         self.api_key = api_key
-        self.base_url = "https://graphql.bitquery.io"
+        self.base_url = "https://streaming.bitquery.io/graphql"
         self.headers = {
             "Content-Type": "application/json",
-            "X-API-KEY": self.api_key
+            "Authorization": f"Bearer {self.api_key}"
         }
 
-    def _make_request(self, query):
+    def request(self, query: str, variables: dict = None):
         """
         Make a request to Bitquery API
+        
+        Args:
+            query (str): GraphQL query string
+            variables (dict, optional): Variables for the query. Defaults to None.
+            
+        Returns:
+            dict: Response data or None if error
         """
         try:
+            payload = {
+                "query": query,
+                "variables": variables or {}
+            }
+            
             response = requests.post(
                 self.base_url,
-                json={"query": query},
+                json=payload,
                 headers=self.headers
             )
             response.raise_for_status()
