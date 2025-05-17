@@ -38,7 +38,7 @@ const Navbar = () => {
               <Link
                 key={item.name}
                 to={item.path}
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 font-medium"
               >
                 {item.name}
               </Link>
