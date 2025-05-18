@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 import traceback
 from backend.database import get_db
 from backend.database.signal import get_signal_by_id
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from backtest_utils.main import generate_ai_indicator, use_indicator_cmd
+from types import SimpleNamespace
 
 router = APIRouter()
 
@@ -172,16 +177,70 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             
         print("file_path", file_path)
         
-        # prepare the df for backtest
+        # prepare the buy and sell signal name, replace the space with underscore
+        buy_signal_name = buy_signal.signal_name.replace(" ", "_")
+        sell_signal_name = sell_signal.signal_name.replace(" ", "_")
         
         
         # backtest function
+        # generate buy signal
+        args = SimpleNamespace(
+            description=buy_signal.signal_description,
+            name=buy_signal_name,
+            save=True,
+            output_dir='indicators',
+            model='gpt-4o',
+            api_key=None  # Will use environment variable
+        )
+        generate_ai_indicator(args)
         
+        # generate sell signal
+        args = SimpleNamespace(
+            description=sell_signal.signal_description,
+            name=sell_signal_name,
+            save=True,
+            output_dir='indicators',
+            model='gpt-4o',
+            api_key=None  # Will use environment variable
+        )
+        generate_ai_indicator(args)
         
+        # backtest strategy
+        # use the buy signal and sell signal to backtest the strategy
+        args = SimpleNamespace(
+            network='eth',
+            pool='0x11950d141EcB863F01007AdD7D1A342041227b58',
+            indicator=buy_signal_name,
+            sell_indicator=sell_signal_name,
+            plot=True,
+            save_json=True,
+            timeframe='day',
+            storage='csv',
+            data_dir='data',
+            indicators_dir='indicators',
+            buy_column=None,
+            sell_column=None,
+            aggregate=1,
+            save_chart=False,
+            chart_dir='charts',
+            json_dir='json_charts',
+            resample=None,
+            file_path=file_path
+        )
+        fig = use_indicator_cmd(args)
+        print("fig", fig)
+        
+        # Parse the json data and save it to the database
+        json_data = json.loads(fig)
+        # Save the json visualization to the database
+        visualization = create_visualization(db, canvas.canvas_id, json_data, viz_result["output_png_path"], viz_result["file_path"])
+        visualization_ids.append(visualization.visualization_id)
+
         # For now, return the complete strategy with signal information
         return {
             "status": "success",
             "strategy": complete_strategy,
+            "fig": fig,
             "results": {
                 "filterSignal": {
                     "id": filter_signal.signal_id,
