@@ -159,6 +159,11 @@ class CMCAPI:
                 # Convert to DataFrame
                 df = pd.DataFrame(quotes)
                 
+                print("df in get_ohlcv", df.head())
+                print("df columns", df.columns)
+                
+                print("timestamp in get_ohlcv", "timestamp" in df.columns)
+                
                 # Convert timestamp to datetime
                 df['time_open'] = pd.to_datetime(df['time_open'])
                 df.set_index('time_open', inplace=True)
@@ -166,6 +171,12 @@ class CMCAPI:
                 # Extract quote data
                 quote_currency = list(df['quote'].iloc[0].keys())[0]  # Get the first quote currency
                 df = pd.json_normalize(df['quote'].apply(lambda x: x[quote_currency]))
+                
+                print("df in get_ohlcv", df.head())
+                print("df columns", df.columns)
+                
+                print("timestamp in get_ohlcv", "timestamp" in df.columns)
+                
                 
                 # Add symbol
                 df['symbol'] = symbol
@@ -179,7 +190,7 @@ class CMCAPI:
             final_df = pd.concat(all_data, axis=0)
             
             # Reorder columns to only include symbol and OHLCV
-            final_df = final_df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
+            final_df = final_df[['symbol', 'open', 'high', 'low', 'close', 'volume', 'timestamp']]
             
             print("\nFinal DataFrame structure:")
             print(final_df.head())
