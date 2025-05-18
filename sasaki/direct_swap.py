@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-直接代币交换脚本 - 在Arbitrum网络上执行简单的代币交换操作
+直接代币交换脚本 - 在Sepolia测试网上执行简单的代币交换操作
 """
 
 import os
 import sys
 import argparse
-from web3 import Web3
-from uniswap import Uniswap
-from dotenv import load_dotenv
 import logging
+from decimal import Decimal
+from dotenv import load_dotenv
+from web3 import Web3
+from web3.middleware import geth_poa_middleware
+from uniswap import Uniswap
 from uniswap.constants import ETH_ADDRESS
+import logging
 
 # 配置日志
 logging.basicConfig(
@@ -23,18 +26,18 @@ logger = logging.getLogger(__name__)
 # 加载环境变量
 load_dotenv()
 
-# Arbitrum网络配置
-ARBITRUM_RPC = "https://arbitrum-mainnet.infura.io/v3/{}"
-ARBITRUM_CHAIN_ID = 42161
+# Sepolia测试网配置
+SEPOLIA_RPC = "https://sepolia.infura.io/v3/{}"
+SEPOLIA_CHAIN_ID = 11155111  # Sepolia的链ID
 
-# Arbitrum上常用代币地址
+# Sepolia测试网上常用代币地址
 TOKEN_ADDRESSES = {
-    "weth": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-    "eth": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",  # 使用WETH地址
-    "usdc": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
-    "usdt": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-    "dai": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
-    "wbtc": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
+    "weth": "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",  # Sepolia上的WETH
+    "eth": ETH_ADDRESS,  # 使用ETH_ADDRESS常量表示ETH
+    "usdc": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",  # Sepolia上的USDC
+    "usdt": "0x0aCBd0E2873e0C28FeB48E55D0DC896B88F0609A",  # Sepolia上的USDT
+    "dai": "0x332C7aC34580dfEF553B7726549cEc7015C4B39b",   # Sepolia上的DAI
+    "wbtc": "0xaFb85A5eC2A95eE8B82D62a4c5b501A39E2fDF5d"    # Sepolia上的WBTC
 }
 
 def get_token_address(token_symbol):
@@ -61,38 +64,39 @@ def setup_uniswap():
         sys.exit(1)
     
     # 设置RPC URL
-    provider_url = ARBITRUM_RPC.format(infura_key)
+    provider_url = SEPOLIA_RPC.format(infura_key)
     
     # 初始化Web3
     web3 = Web3(Web3.HTTPProvider(provider_url))
+    # 为POA链添加中间件
+    web3.middleware_onion.inject(geth_poa_middleware, layer=0)
     
     # 检查连接
     if not web3.is_connected():
-        logger.error(f"无法连接到Arbitrum网络: {provider_url}")
+        logger.error(f"无法连接到Sepolia测试网: {provider_url}")
         sys.exit(1)
     
-    logger.info(f"成功连接到Arbitrum网络，当前区块: {web3.eth.block_number}")
+    logger.info(f"成功连接到Sepolia测试网，当前区块: {web3.eth.block_number}")
     
-    # 初始化Uniswap客户端
+    # Sepolia上的Uniswap V2合约地址
+    factory_contract_addr = "0x7E0987E5b3a30e3f2828572Bb659A548460a3003"  # Sepolia上的工厂合约
+    router_contract_addr = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008"  # Sepolia上的路由器合约
+    
+    # 直接使用V2，并明确指定合约地址
     try:
-        # 尝试使用Uniswap V3
-        uniswap = Uniswap(
-            address=wallet_address,
-            private_key=private_key,
-            version=3,
-            provider=provider_url
-        )
-        logger.info("使用Uniswap V3")
-    except Exception as e:
-        logger.warning(f"初始化Uniswap V3失败: {e}，尝试使用V2")
-        # 如果V3初始化失败，尝试使用V2
         uniswap = Uniswap(
             address=wallet_address,
             private_key=private_key,
             version=2,
-            provider=provider_url
+            provider=provider_url,
+            factory_contract_addr=factory_contract_addr,
+            router_contract_addr=router_contract_addr,
+            web3=web3  # 传入已配置中间件的web3实例
         )
-        logger.info("使用Uniswap V2")
+        logger.info(f"使用Uniswap V2 (Factory: {factory_contract_addr}, Router: {router_contract_addr})")
+    except Exception as e:
+        logger.error(f"初始化Uniswap失败: {e}")
+        sys.exit(1)
     
     return uniswap, web3, wallet_address
 
@@ -112,22 +116,43 @@ def eth_to_token(uniswap, web3, wallet_address, token_address, amount, slippage=
         return None
     
     try:
-        # 执行交易
-        logger.info(f"使用 {amount} ETH 购买代币...")
+        # 检查代币地址
+        logger.info(f"交易详情 - 从: {ETH_ADDRESS} (原生 ETH)")
+        logger.info(f"交易详情 - 到: {token_address}")
+        logger.info(f"交易详情 - 数量: {amount} ETH ({amount_wei} wei)")
+        logger.info(f"交易详情 - 滑点: {slippage/100}")
+        
+        # 尝试获取价格估计
+        try:
+            # 注意：这可能会失败，因为测试网上可能没有足够的流动性
+            price = uniswap.get_price_input(ETH_ADDRESS, token_address, amount_wei)
+            logger.info(f"价格估计: 使用 {amount} ETH 可获得大约 {price} 代币")
+        except Exception as e:
+            logger.warning(f"无法获取价格估计: {e}")
         
         # 获取当前gas价格
         gas_price = web3.eth.gas_price
         logger.info(f"当前Gas价格: {web3.from_wei(gas_price, 'gwei')} Gwei")
         
+        # 检查是否有流动性池
+        try:
+            # 尝试获取流动性池地址
+            if hasattr(uniswap, 'get_pair_address'):
+                pair_address = uniswap.get_pair_address(ETH_ADDRESS, token_address)
+                logger.info(f"流动性池地址: {pair_address}")
+            else:
+                logger.warning("无法获取流动性池地址")
+        except Exception as e:
+            logger.warning(f"检查流动性池时出错: {e}")
         
         # 执行交换
-        # 在eth_to_token函数中
+        logger.info("开始执行交易...")
         tx_hash = uniswap.make_trade(
             ETH_ADDRESS,
             token_address,
             amount_wei,  # 已经是wei单位，不需要再乘以10^18
             slippage=slippage/100,
-            fee=500
+            fee=3000  # 尝试使用更高的手续费，默认为0.3%
         )
         
         logger.info(f"交易已提交，交易哈希: {tx_hash.hex()}")
@@ -344,7 +369,7 @@ def token_to_eth(uniswap, web3, wallet_address, token_address, amount, slippage=
         return None
 
 def main():
-    parser = argparse.ArgumentParser(description="在Arbitrum上执行代币交换")
+    parser = argparse.ArgumentParser(description="在Sepolia测试网上执行代币交换")
     parser.add_argument("--from", dest="from_token", required=True, help="源代币符号或地址 (例如: eth, usdc, 0x...)")
     parser.add_argument("--to", dest="to_token", required=True, help="目标代币符号或地址 (例如: usdc, eth, 0x...)")
     parser.add_argument("--amount", type=float, required=True, help="交换数量")
@@ -374,7 +399,7 @@ def main():
         
         if tx_hash:
             print(f"✅ 交易成功! 交易哈希: {tx_hash}")
-            print(f"可在 https://arbiscan.io/tx/{tx_hash} 查看交易详情")
+            print(f"可在 https://sepolia.etherscan.io/tx/{tx_hash} 查看交易详情")
         else:
             print("❌ 交易失败!")
             sys.exit(1)
