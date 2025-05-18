@@ -12,17 +12,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from geckoterminal_backtracker.storage.csv_storage import CSVStorage
-from geckoterminal_backtracker.storage.sqlite_storage import SQLiteStorage
-from geckoterminal_backtracker.api.gecko_api import GeckoTerminalAPI
-from geckoterminal_backtracker.utils.data_fetcher import OHLCDataFetcher
-from geckoterminal_backtracker.analysis.analyzer import OHLCAnalyzer
-from geckoterminal_backtracker.analysis.ai_indicator_runner import generate_ai_indicator
-from geckoterminal_backtracker.analysis.indicator_backtester import (
+from backtest_utils.geckoterminal_backtracker.storage.csv_storage import CSVStorage
+from backtest_utils.geckoterminal_backtracker.storage.sqlite_storage import SQLiteStorage
+from backtest_utils.geckoterminal_backtracker.api.gecko_api import GeckoTerminalAPI
+from backtest_utils.geckoterminal_backtracker.utils.data_fetcher import OHLCDataFetcher
+from backtest_utils.geckoterminal_backtracker.analysis.analyzer import OHLCAnalyzer
+from backtest_utils.geckoterminal_backtracker.analysis.ai_indicator_runner import generate_ai_indicator
+from backtest_utils.geckoterminal_backtracker.analysis.indicator_backtester import (
     find_indicator_file, use_indicator, backtest_indicators, 
     calculate_trading_stats, plot_backtest_results, resample_ohlc
 )
-from geckoterminal_backtracker.analysis.indicator_manager import list_indicators, print_indicators_table
+from backtest_utils.geckoterminal_backtracker.analysis.indicator_manager import list_indicators, print_indicators_table
 
 
 def setup_argparse():
@@ -270,7 +270,9 @@ def use_indicator_cmd(args):
     
     # 加载 OHLC 数据
     try:
-        df = storage.load_ohlc(args.network, args.pool, args.timeframe, args.aggregate)
+        # Pass the file_path to load_ohlc if it exists in args
+        file_path = getattr(args, 'file_path', None)
+        df = storage.load_ohlc(args.network, args.pool, args.timeframe, args.aggregate, file_path=file_path)
         if df.empty:
             print(f"错误: 找不到数据。请先使用 'fetch' 命令获取数据")
             return
@@ -420,6 +422,8 @@ def use_indicator_cmd(args):
         
         if chart_path:
             print(f"图表已保存到: {chart_path}")
+        
+        return fig
 
 def main():
     """主函数"""

@@ -74,15 +74,27 @@ const StrategyForm = ({ onSubmit }) => {
   const formatSignalName = (signal) => {
     if (!signal) return '';
     
-    // Check if the signal object has a name property
-    if (signal.name) return signal.name;
-    
-    // If no name, try to create one from signal_definition
-    if (signal.signal_definition) {
-      return `Signal #${signal.signal_id}: ${signal.signal_definition.substring(0, 30)}${signal.signal_definition.length > 30 ? '...' : ''}`;
+    // If signal has a signal_name property (from backend), use it
+    if (signal.signal_name) {
+      return signal.signal_name;
     }
     
-    // Last resort
+    // If signal has a name property (legacy support)
+    if (signal.name) {
+      return signal.name;
+    }
+    
+    // If no name but has signal_definition, create a readable name
+    if (signal.signal_definition) {
+      // Clean up and shorten the definition for display
+      const cleanDefinition = signal.signal_definition
+        .replace(/^Generate a signal that/, '')
+        .replace(/^Create a signal that/, '')
+        .trim();
+      return cleanDefinition.length > 50 ? `${cleanDefinition.substring(0, 47)}...` : cleanDefinition;
+    }
+    
+    // Last resort: use signal ID
     return `Signal #${signal.signal_id}`;
   };
   

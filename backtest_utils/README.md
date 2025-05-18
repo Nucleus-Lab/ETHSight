@@ -93,6 +93,8 @@ python main.py ai-indicator --description "创建一个指标，当价格突破2
 python main.py use-indicator --network eth --pool 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640 --indicator "均线突破信号" --plot
 ```
 
+python main.py use-indicator --network eth --pool 0x11950d141EcB863F01007AdD7D1A342041227b58 --indicator "rsi_buy" --sell-indicator "rsi_sell" --plot --save-json --timeframe minut
+
 参数说明:
 - `--network`: 网络 ID，例如 eth, bsc
 - `--pool`: 池子地址

@@ -333,7 +333,25 @@ export const runBacktest = async (strategy) => {
     
     const data = await response.json();
     console.log('Backtest results:', data);
-    return data;
+
+    // Transform the data to match the expected format for BacktestResults
+    return {
+      success: true,
+      strategy_id: `backtest_${Date.now()}`, // Generate a unique ID
+      performance: {
+        totalReturn: 0, // You might want to calculate this from the fig data
+        sharpeRatio: 0, // You might want to calculate this from the fig data
+        maxDrawdown: 0, // You might want to calculate this from the fig data
+        winRate: 0, // You might want to calculate this from the fig data
+        trades: 0 // You might want to calculate this from the fig data
+      },
+      fig: data.fig, // Use the figure data directly from backend
+      signals: {
+        filter: data.results.filterSignal,
+        buy: data.results.buySignal,
+        sell: data.results.sellSignal
+      }
+    };
   } catch (error) {
     console.error('Error running backtest:', error);
     throw error;

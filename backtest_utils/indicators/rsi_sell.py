@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 
-def calculate_rsi_volume_sell_signal(df):
+def calculate_sell_signal_on_rise(df):
     """
-    计算 RSI 超买和成交量增加时的卖出信号指标
+    计算上涨0.1%就卖出的指标信号
 
     参数:
         df (pandas.DataFrame): 包含 OHLC 和成交量数据的 DataFrame
@@ -11,26 +11,22 @@ def calculate_rsi_volume_sell_signal(df):
     返回:
         pandas.DataFrame: 添加了 'buy_signal' 和 'sell_signal' 列的 DataFrame
     """
-    # 计算 RSI
-    window_length = 14
-    close = df['close']
-    delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window_length).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window_length).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    df['rsi'] = rsi
-
-    # 计算成交量变化百分比
-    df['volume_change'] = df['volume'].pct_change()
-
     # 初始化信号列
     df['buy_signal'] = 0
     df['sell_signal'] = 0
 
+    # 计算前一天的收盘价
+    df['previous_close'] = df['close'].shift(1)
+
+    # 计算上涨0.1%的条件
+    df['price_increase'] = (df['close'] - df['previous_close']) / df['previous_close']
+
     # 生成卖出信号
-    df.loc[(df['rsi'] > 70) & (df['volume_change'] > 0), 'sell_signal'] = 1
+    df.loc[df['price_increase'] >= 0.001, 'sell_signal'] = 1
+
+    # 删除临时列
+    df.drop(columns=['previous_close', 'price_increase'], inplace=True)
 
     return df
 
-calculate_rsi_volume_sell_signal(df)
+calculate_sell_signal_on_rise(df)
