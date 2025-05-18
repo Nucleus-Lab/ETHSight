@@ -54,7 +54,7 @@ class CSVStorage:
         
         return filepath
     
-    def load_ohlc(self, network, pool_address, timeframe, aggregate):
+    def load_ohlc(self, network, pool_address, timeframe, aggregate, file_path=None):
         """
         从 CSV 文件加载 OHLC 数据
         
@@ -63,12 +63,17 @@ class CSVStorage:
             pool_address (str): 池子地址
             timeframe (str): 时间周期
             aggregate (int): 聚合周期
+            file_path (str, optional): 直接指定文件路径，如果提供则忽略其他参数
             
         返回:
             pandas.DataFrame: OHLC 数据
         """
-        # 文件路径
-        filepath = os.path.join(self.base_dir, network, pool_address, f"{timeframe}_{aggregate}.csv")
+        # 如果提供了文件路径，直接使用
+        if file_path and os.path.exists(file_path):
+            filepath = file_path
+        else:
+            # 使用默认的文件路径构建方式
+            filepath = os.path.join(self.base_dir, network, pool_address, f"{timeframe}_{aggregate}.csv")
         
         if not os.path.exists(filepath):
             print(f"File not found: {filepath}")
@@ -79,7 +84,16 @@ class CSVStorage:
         
         # 转换时间戳为 datetime
         if 'timestamp' in df.columns and 'datetime' not in df.columns:
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+            try:
+                # First try parsing as Unix timestamp
+                df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+            except ValueError:
+                try:
+                    # If that fails, try parsing as ISO format
+                    df['datetime'] = pd.to_datetime(df['timestamp'])
+                except Exception as e:
+                    print(f"Error parsing timestamp: {str(e)}")
+                    return pd.DataFrame()
             
         return df
     

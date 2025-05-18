@@ -176,6 +176,12 @@ def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None,
     # 应用买入指标
     result_df, buy_indicator_info = use_indicator(df, buy_indicator, indicators_dir)
     
+    # 保存买入指标的买入信号
+    buy_signal_backup = None
+    if 'buy_signal' in result_df.columns:
+        buy_signal_backup = result_df['buy_signal'].copy()
+        print(f"备份买入信号，共有 {buy_signal_backup.sum()} 个买入信号")
+    
     # 如果指定了卖出指标，则应用卖出指标
     sell_indicator_info = None
     if sell_indicator:
@@ -185,9 +191,19 @@ def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None,
         # 应用卖出指标
         result_df, sell_indicator_info = use_indicator(df, sell_indicator, indicators_dir)
         
-        # 将买入指标的列添加回结果中
+        # 恢复买入信号
+        if buy_signal_backup is not None:
+            # 如果卖出指标也创建了buy_signal列，合并两个信号
+            if 'buy_signal' in result_df.columns:
+                # 使用逻辑或合并买入信号
+                result_df['buy_signal'] = (result_df['buy_signal'] | buy_signal_backup).astype(int)
+                print(f"合并后的买入信号数量: {result_df['buy_signal'].sum()}")
+            else:
+                result_df['buy_signal'] = buy_signal_backup
+        
+        # 将买入指标的其他列添加回结果中
         for col in buy_columns:
-            if col not in result_df.columns:
+            if col not in result_df.columns and col != 'buy_signal':
                 # 从原始结果中获取买入指标列
                 tmp_df, _ = use_indicator(df, buy_indicator, indicators_dir)
                 result_df[col] = tmp_df[col]
@@ -206,6 +222,15 @@ def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None,
     else:
         # 自动识别卖出信号列
         sell_signal_columns = [col for col in result_df.columns if 'sell' in col.lower()]
+    
+    # 打印最终的买入和卖出信号数量
+    for col in buy_signal_columns:
+        if col in result_df.columns:
+            print(f"最终 {col} 信号数量: {result_df[col].sum()}")
+    
+    for col in sell_signal_columns:
+        if col in result_df.columns:
+            print(f"最终 {col} 信号数量: {result_df[col].sum()}")
     
     # 计算交易统计
     stats = calculate_trading_stats(result_df, buy_signal_columns, sell_signal_columns)

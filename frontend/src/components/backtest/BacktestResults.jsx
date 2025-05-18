@@ -26,37 +26,28 @@ const BacktestResults = ({ strategyIds = [], setActiveStrategies, lastResults })
       // Check if this result is already in backtestResults
       const existingIndex = backtestResults.findIndex(result => result.id === lastResults.strategy_id);
       
+      const newResult = {
+        id: lastResults.strategy_id,
+        name: `Strategy ${lastResults.strategy_id}`,
+        description: lastResults.strategy_id.startsWith('trade_') 
+          ? 'Live trading strategy' 
+          : 'Backtest strategy',
+        performance: lastResults.performance || {},
+        fig: lastResults.fig,
+        signals: lastResults.signals,
+        isLiveTrade: lastResults.strategy_id.startsWith('trade_')
+      };
+      
       if (existingIndex >= 0) {
         // Update existing result
         setBacktestResults(prev => {
           const updated = [...prev];
-          updated[existingIndex] = {
-            id: lastResults.strategy_id,
-            name: `Strategy ${lastResults.strategy_id}`,
-            description: lastResults.strategy_id.startsWith('trade_') 
-              ? 'Live trading strategy' 
-              : 'Backtest strategy',
-            performance: lastResults.performance || {},
-            data: formatChartData(lastResults.chart_data),
-            isLiveTrade: lastResults.strategy_id.startsWith('trade_')
-          };
+          updated[existingIndex] = newResult;
           return updated;
         });
       } else {
         // Add new result
-        setBacktestResults(prev => [
-          ...prev,
-          {
-            id: lastResults.strategy_id,
-            name: `Strategy ${lastResults.strategy_id}`,
-            description: lastResults.strategy_id.startsWith('trade_') 
-              ? 'Live trading strategy' 
-              : 'Backtest strategy',
-            performance: lastResults.performance || {},
-            data: formatChartData(lastResults.chart_data),
-            isLiveTrade: lastResults.strategy_id.startsWith('trade_')
-          }
-        ]);
+        setBacktestResults(prev => [...prev, newResult]);
       }
     }
   }, [lastResults]);

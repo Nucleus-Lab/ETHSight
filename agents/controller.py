@@ -101,11 +101,11 @@ tools = [
                 },
                 "time_start": {
                     "type": "string",
-                    "description": "Start time in ISO format (e.g., '2023-01-01')"
+                    "description": "Start time in ISO format (e.g., '2025-05-11T00:00:00.000Z')"
                 },
                 "time_end": {
                     "type": "string",
-                    "description": "End time in ISO format (e.g., '2023-12-31')"
+                    "description": "End time in ISO format (e.g., '2025-05-18T00:00:00.000Z')"
                 },
                 "count": {
                     "type": "integer",

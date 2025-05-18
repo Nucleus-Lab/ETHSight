@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import Plot from 'react-plotly.js';
 
 const BacktestResultCard = ({ result, resultId }) => {
@@ -11,6 +11,27 @@ const BacktestResultCard = ({ result, resultId }) => {
       </div>
     );
   }
+
+  // Parse and validate Plotly data
+  const plotlyData = useMemo(() => {
+    if (!result.fig) return null;
+
+    try {
+      const parsedData = typeof result.fig === 'string' 
+        ? JSON.parse(result.fig) 
+        : result.fig;
+
+      if (!parsedData?.data || !Array.isArray(parsedData.data)) {
+        console.error('BacktestResultCard - Invalid plot data structure:', parsedData);
+        return null;
+      }
+
+      return parsedData;
+    } catch (error) {
+      console.error('BacktestResultCard - Error parsing plot data:', error);
+      return null;
+    }
+  }, [result.fig]);
 
   // Format performance metrics
   const formatPercentage = (value) => `${parseFloat(value).toFixed(2)}%`;
@@ -86,39 +107,21 @@ const BacktestResultCard = ({ result, resultId }) => {
 
       {/* Chart */}
       <div className="h-64 w-full">
-        {result.data ? (
+        {plotlyData ? (
           <Plot
-            data={[
-              {
-                x: result.data.x,
-                y: result.data.y,
-                type: result.data.type || 'scatter',
-                mode: result.data.mode || 'lines',
-                name: result.data.name || 'Performance',
-                line: { color: '#ffde0f' },
-              },
-              // Add buy points if present
-              ...(result.data.tradePoints ? [{
-                x: result.data.tradePoints.filter(point => point.type === 'buy').map(point => point.date),
-                y: result.data.tradePoints.filter(point => point.type === 'buy').map(point => point.value),
-                type: 'scatter',
-                mode: 'markers',
-                marker: { color: 'green', symbol: 'triangle-up', size: 12 },
-                name: 'Buy'
-              }] : []),
-              // Add sell points if present
-              ...(result.data.tradePoints ? [{
-                x: result.data.tradePoints.filter(point => point.type === 'sell').map(point => point.date),
-                y: result.data.tradePoints.filter(point => point.type === 'sell').map(point => point.value),
-                type: 'scatter',
-                mode: 'markers',
-                marker: { color: 'red', symbol: 'triangle-down', size: 12 },
-                name: 'Sell'
-              }] : []),
-            ]}
+            data={plotlyData.data}
             layout={{
+              ...plotlyData.layout,
               autosize: true,
               margin: { l: 40, r: 20, t: 20, b: 40 },
+              showlegend: true,
+              legend: {
+                orientation: 'h',
+                x: 0,
+                y: -0.2
+              },
+              paper_bgcolor: 'white',
+              plot_bgcolor: 'white',
               xaxis: {
                 title: 'Date',
                 showgrid: false,
@@ -128,20 +131,15 @@ const BacktestResultCard = ({ result, resultId }) => {
                 showgrid: true,
                 gridcolor: '#f0f0f0',
               },
-              paper_bgcolor: 'white',
-              plot_bgcolor: 'white',
-              showlegend: true,
-              legend: {
-                orientation: 'h', 
-                x: 0, 
-                y: -0.2
-              }
             }}
             config={{
               displayModeBar: false,
               responsive: true,
             }}
             style={{ width: '100%', height: '100%' }}
+            onError={(err) => {
+              console.error('BacktestResultCard - Plot error:', err);
+            }}
           />
         ) : result.isLiveTrade ? (
           <div className="h-full w-full flex items-center justify-center bg-gray-50 p-6 rounded border border-gray-200">
@@ -156,6 +154,33 @@ const BacktestResultCard = ({ result, resultId }) => {
           </div>
         )}
       </div>
+
+      {/* Signal Information */}
+      {result.signals && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">Signal Information</h3>
+          <div className="space-y-3">
+            {result.signals.filter && (
+              <div>
+                <p className="font-medium">Filter Signal:</p>
+                <p className="text-sm text-gray-600">{result.signals.filter.description}</p>
+              </div>
+            )}
+            {result.signals.buy && (
+              <div>
+                <p className="font-medium">Buy Signal:</p>
+                <p className="text-sm text-gray-600">{result.signals.buy.description}</p>
+              </div>
+            )}
+            {result.signals.sell && (
+              <div>
+                <p className="font-medium">Sell Signal:</p>
+                <p className="text-sm text-gray-600">{result.signals.sell.description}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="mt-6 flex justify-end space-x-4">
