@@ -96,14 +96,14 @@ const StrategyForm = ({ onSubmit }) => {
     setLoading(true);
     
     const strategy = {
-      filterSignal,
+      filterSignal_id: parseInt(filterSignal),
       buyCondition: {
-        signal: buySignal,
+        signal_id: parseInt(buySignal),
         operator: buyOperator,
         threshold: buyThreshold
       },
       sellCondition: {
-        signal: sellSignal,
+        signal_id: parseInt(sellSignal),
         operator: sellOperator,
         threshold: sellThreshold
       },

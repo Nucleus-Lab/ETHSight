@@ -92,23 +92,34 @@ tools = [
             "properties": {
                 "symbol": {
                     "type": "string",
-                    "description": "Cryptocurrency symbol, e.g. BTC, ETH, WETH"
+                    "description": "Alternatively pass one or more comma-separated cryptocurrency symbols. Example: 'BTC,ETH'"
+                },
+                "time_period": {
+                    "type": "string",
+                    "description": "Time period to return OHLCV data for. Options: 'daily', 'hourly'",
+                    "default": "daily"
                 },
                 "time_start": {
                     "type": "string",
-                    "description": "Start time in ISO format, e.g. 2023-01-01T00:00:00Z"
+                    "description": "Start time in ISO format (e.g., '2025-05-11T00:00:00.000Z')"
                 },
                 "time_end": {
                     "type": "string",
-                    "description": "End time in ISO format, e.g. 2023-01-07T23:59:59Z"
+                    "description": "End time in ISO format (e.g., '2025-05-18T00:00:00.000Z')"
+                },
+                "count": {
+                    "type": "integer",
+                    "description": "Limit the number of time periods to return. Defaults to 10, max 10000",
+                    "default": 10
                 },
                 "interval": {
                     "type": "string",
-                    "description": "Interval, e.g. 1d, 1h, 5m, etc."
+                    "description": "Adjust the interval that time_period is sampled. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'; Other: 'hourly', 'daily', 'weekly', 'monthly', 'yearly'",
+                    "default": "daily"
                 },
                 "convert": {
                     "type": "string",
-                    "description": "Convert currency, e.g. USD",
+                    "description": "Currency to convert to",
                     "default": "USD"
                 }
             },
@@ -194,11 +205,13 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                     "result": "CMC_API_KEY not found in environment variables"
                 }
             cmc = CMCAPI(api_key=api_key)
-            df = cmc.get_historical_quotes(
+            df = cmc.get_ohlcv(
                 symbol=args["symbol"],
+                time_period=args.get("time_period", "daily"),
                 time_start=args.get("time_start"),
                 time_end=args.get("time_end"),
-                interval=args.get("interval", "1d"),
+                count=args.get("count", 10),
+                interval=args.get("interval", "daily"),
                 convert=args.get("convert", "USD")
             )
             if df is not None and not df.empty:
@@ -256,7 +269,7 @@ def process_with_claude(conversation_history: List[Dict[str, Any]], max_turns: i
                 model=get_model_config(ModelConfig.SONNET)["model_name"],
                 max_tokens=1024,
                 messages=conversation_history,  # Use full history
-                system=controller_system_prompt,
+                system=controller_system_prompt + f'\n\nCurrent time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
                 tools=tools
             )
             
