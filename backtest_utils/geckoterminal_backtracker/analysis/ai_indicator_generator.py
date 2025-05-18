@@ -106,6 +106,7 @@ class AIIndicatorGenerator:
 3. 如果你的指标只生成买入信号，仍然需要创建空的 'sell_signal' 列（全部为 0）
 4. 如果你的指标只生成卖出信号，仍然需要创建空的 'buy_signal' 列（全郦为 0）
 5. 信号列的数据类型必须为整数（int），不要使用布尔值或浮点数
+6. 最后要运行这个函数，我会传入外参 df，你只需要直接运行函数就行
 
 示例（买卖信号生成）:
 ```python
@@ -140,6 +141,8 @@ def calculate_indicator(df):
     df['indicator_name'] = ...
     
     return df
+
+calculate_indicator(df)
 ```
 
 请只返回 Python 代码，不要包含任何其他解释。

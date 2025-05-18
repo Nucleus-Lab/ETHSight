@@ -1,46 +1,52 @@
 import pandas as pd
 import numpy as np
 
-def rsi_buy(df):
+def calculate_rsi_buy_signal(df):
     """
-    生成测试用的买入信号
-
+    计算RSI超卖和价格下跌时的买入信号指标
+    
     参数:
         df (pandas.DataFrame): 包含 OHLC 和成交量数据的 DataFrame
-
+        
     返回:
-        pandas.DataFrame: 添加了买入和卖出信号列的 DataFrame
+        pandas.DataFrame: 添加了买入信号和卖出信号列的 DataFrame
     """
-    # 初始化买入和卖出信号列
+    # 初始化信号列
     df['buy_signal'] = 0
     df['sell_signal'] = 0
     
-    # 每 10 个数据点生成一个买入信号
-    for i in range(0, len(df), 10):
-        if i < len(df):
-            df.loc[df.index[i], 'buy_signal'] = 1
+    # 计算RSI
+    window_length = 14
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window_length).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window_length).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
     
-    # 确保至少有一个买入信号
-    if df['buy_signal'].sum() == 0 and len(df) > 0:
-        # 如果没有生成信号，在第一个和最后一个数据点生成信号
-        df.loc[df.index[0], 'buy_signal'] = 1
-        if len(df) > 1:
-            df.loc[df.index[-1], 'buy_signal'] = 1
+    # 计算前一日的收盘价
+    df['previous_close'] = df['close'].shift(1)
     
-    # 每个买入信号后的第 5 个点生成卖出信号（如果存在）
-    buy_indices = df.index[df['buy_signal'] == 1].tolist()
-    for idx in buy_indices:
-        pos = df.index.get_loc(idx)
-        if pos + 5 < len(df):
-            df.loc[df.index[pos + 5], 'sell_signal'] = 1
+    # 计算价格下跌的百分比
+    df['price_drop'] = (df['close'] - df['previous_close']) / df['previous_close']
     
-    # 添加一些指标列供显示
-    df['test_indicator'] = df['close'].rolling(window=3).mean()
+    # 打印价格下跌的统计信息
+    drop_count = (df['price_drop'] <= -0.001).sum()
+    print(f"价格下跌超过0.1%的点数: {drop_count} (占总数的 {drop_count/len(df)*100:.2f}%)")
     
-    print(f"\n生成了 {df['buy_signal'].sum()} 个买入信号")
-    print(f"生成了 {df['sell_signal'].sum()} 个卖出信号\n")
+    # 生成买入信号：当RSI < 30且价格下跌超过0.1%时
+    df.loc[(df['rsi'] < 30) & (df['price_drop'] <= -0.001), 'buy_signal'] = 1
+    
+    # 确保信号列是整数类型
+    df['buy_signal'] = df['buy_signal'].astype(int)
+    df['sell_signal'] = df['sell_signal'].astype(int)
+    
+    # 打印买入信号统计
+    buy_count = df['buy_signal'].sum()
+    print(f"生成的买入信号数量: {buy_count} (占总数的 {buy_count/len(df)*100:.2f}%)")
+    
+    # 删除临时列
+    df.drop(columns=['previous_close', 'price_drop'], inplace=True)
     
     return df
 
-# 调用函数处理数据
-df = rsi_buy(df)
+calculate_rsi_buy_signal(df)
