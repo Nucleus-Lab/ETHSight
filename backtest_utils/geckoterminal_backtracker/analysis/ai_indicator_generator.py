@@ -92,7 +92,7 @@ class AIIndicatorGenerator:
 描述: {description}
 
 要求:
-1. 函数应该接受一个 pandas DataFrame 作为输入，该 DataFrame 包含timestamp,open,high,low,close,volume,datetime,base_token_address,base_token_name,base_token_symbol,quote_token_address,quote_token_name,quote_token_symbol列
+1. 函数应该接受一个 pandas DataFrame 作为输入，该 DataFrame 包含open,high,low,close,volume,datetime列
 2. 函数应该返回原始 DataFrame，但添加了新的指标列
 3. 使用 pandas 和 numpy 进行计算
 4. 函数名应该反映指标的用途
