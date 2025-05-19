@@ -28,7 +28,7 @@ const Navbar = () => {
               }}
             />
           </div>
-          <span className="px-2 text-xl font-semibold text-gray-800">ETHSight</span>
+          <span className="px-2 text-xl font-semibold text-gray-800">SignalFlow</span>
         </div>
 
         {/* Center - Navigation (always centered) */}

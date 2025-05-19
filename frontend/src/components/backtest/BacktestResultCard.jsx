@@ -107,7 +107,10 @@ const BacktestResultCard = ({ result, resultId }) => {
 
       {/* Chart */}
       <div className="h-64 w-full">
-        {plotlyData ? (
+          <div className="h-full w-full flex items-center justify-center">
+                <p className="text-gray-500">Go to the pop-up page to view the chart</p>
+          </div>
+        {/* {plotlyData ? (
           <Plot
             data={plotlyData.data}
             layout={{
@@ -152,7 +155,7 @@ const BacktestResultCard = ({ result, resultId }) => {
           <div className="h-full w-full flex items-center justify-center">
             <p className="text-gray-500">No chart data available</p>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Signal Information */}

@@ -229,14 +229,7 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
         )
         fig = use_indicator_cmd(args)
         print("fig", fig)
-        
-        # Parse the json data and save it to the database
-        json_data = json.loads(fig)
-        # Save the json visualization to the database
-        visualization = create_visualization(db, canvas.canvas_id, json_data, viz_result["output_png_path"], viz_result["file_path"])
-        visualization_ids.append(visualization.visualization_id)
 
-        # For now, return the complete strategy with signal information
         return {
             "status": "success",
             "strategy": complete_strategy,

@@ -423,7 +423,7 @@ def use_indicator_cmd(args):
         if chart_path:
             print(f"图表已保存到: {chart_path}")
         
-        return fig
+        return fig.to_json()
 
 def main():
     """主函数"""
