@@ -1,0 +1,6 @@
+data/*
+archive/*
+.env
+test.ipynb
+indicators/*
+json_charts/*
