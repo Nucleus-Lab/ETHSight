@@ -11,7 +11,7 @@ const WelcomeAnimation = () => {
   // 1: "to graphs" slides in from right
   // 2: "graphs" fades to "signals"
   // 3: "signals" fades to "trade"
-  // 4: "ETHSight is here for you" slides up
+  // 4: "SignalFlow is here for you" slides up
   
   useEffect(() => {
     if (animationStep >= 5) {
@@ -106,7 +106,7 @@ const WelcomeAnimation = () => {
           </div>
         )}
         
-        {/* ETHSight is here for you */}
+        {/* SignalFlow is here for you */}
         {animationStep === 4 && (
           <div 
             className="absolute inset-x-0 transition-all duration-700 ease-out"
@@ -117,7 +117,7 @@ const WelcomeAnimation = () => {
             }}
           >
             <div className="text-3xl md:text-4xl lg:text-5xl font-bold">
-              <span className="text-primary-main">ETHSight</span>
+              <span className="text-primary-main">SignalFlow</span>
               <br />
               <span className="text-gray-800"> is here for you</span>
             </div>
