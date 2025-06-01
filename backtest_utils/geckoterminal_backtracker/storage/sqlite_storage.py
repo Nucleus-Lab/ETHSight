@@ -178,7 +178,7 @@ class SQLiteStorage:
         print(f"Data saved to database {self.db_path}, table ohlc_data")
     
     def load_ohlc(self, network, pool_address, timeframe, aggregate, 
-                  start_timestamp=None, end_timestamp=None):
+                  start_timestamp=None, end_timestamp=None, file_path=None):
         """
         从 SQLite 数据库加载 OHLC 数据
         
@@ -189,10 +189,33 @@ class SQLiteStorage:
             aggregate (int): 聚合周期
             start_timestamp (int): 开始时间戳
             end_timestamp (int): 结束时间戳
+            file_path (str, optional): 直接指定文件路径，如果提供则从CSV文件加载
             
         返回:
             pandas.DataFrame: OHLC 数据
         """
+        # 如果提供了文件路径，直接从CSV加载
+        if file_path and os.path.exists(file_path):
+            print(f"Loading data from CSV file: {file_path}")
+            df = pd.read_csv(file_path)
+            
+            # 转换时间戳为 datetime
+            if 'timestamp' in df.columns and 'datetime' not in df.columns:
+                try:
+                    # First try parsing as Unix timestamp
+                    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+                except ValueError:
+                    try:
+                        # If that fails, try parsing as ISO format
+                        df['datetime'] = pd.to_datetime(df['timestamp'])
+                    except Exception as e:
+                        print(f"Error parsing timestamp: {str(e)}")
+                        return pd.DataFrame()
+            elif 'datetime' in df.columns:
+                df['datetime'] = pd.to_datetime(df['datetime'])
+            
+            return df
+        
         # 构建查询
         query = '''
         SELECT * FROM ohlc_data 
