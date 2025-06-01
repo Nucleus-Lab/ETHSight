@@ -181,6 +181,12 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             sell_indicator_name=sell_indicator_name
         )
         
+    
+        print("backtest_result")
+        for key, result in backtest_result.items():
+            print(key)
+            print(result)
+        
         # Return comprehensive result
         return {
             "status": "success",

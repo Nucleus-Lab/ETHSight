@@ -23,6 +23,9 @@ const BacktestResults = ({ strategyIds = [], setActiveStrategies, lastResults })
   // Process last results when they're updated
   useEffect(() => {
     if (lastResults && lastResults.success) {
+      console.log('BacktestResults - Processing lastResults:', lastResults);
+      console.log('BacktestResults - backtest_results in lastResults:', lastResults.backtest_results);
+      
       // Check if this result is already in backtestResults
       const existingIndex = backtestResults.findIndex(result => result.id === lastResults.strategy_id);
       
@@ -34,6 +37,7 @@ const BacktestResults = ({ strategyIds = [], setActiveStrategies, lastResults })
           : 'Backtest strategy',
         performance: lastResults.performance || {},
         fig: lastResults.fig,
+        backtest_results: lastResults.backtest_results,
         signals: lastResults.signals,
         isLiveTrade: lastResults.strategy_id.startsWith('trade_')
       };

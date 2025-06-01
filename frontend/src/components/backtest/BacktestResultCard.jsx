@@ -12,6 +12,8 @@ const BacktestResultCard = ({ result, resultId }) => {
     );
   }
 
+  console.log('result received in BacktestResultCard', result)
+
   // Parse and validate Plotly data
   const plotlyData = useMemo(() => {
     if (!result.fig) return null;
@@ -66,43 +68,46 @@ const BacktestResultCard = ({ result, resultId }) => {
         <div className="bg-gray-50 p-3 rounded-md">
           <p className="text-sm text-gray-500">Total Return</p>
           <p className={`text-2xl font-semibold ${
-            result.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
+            result.backtest_results?.trading_stats?.total_return >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
-            {formatPercentage(result.performance.totalReturn)}
+            {result.backtest_results?.trading_stats?.total_return ? 
+              formatPercentage(result.backtest_results.trading_stats.total_return) : 'N/A'}
+          </p>
+        </div>
+
+        <div className="bg-gray-50 p-3 rounded-md">
+          <p className="text-sm text-gray-500">Avg Return</p>
+          <p className={`text-2xl font-semibold ${
+            result.backtest_results?.trading_stats?.avg_return >= 0 ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {result.backtest_results?.trading_stats?.avg_return ? 
+              formatPercentage(result.backtest_results.trading_stats.avg_return) : 'N/A'}
           </p>
         </div>
         
         <div className="bg-gray-50 p-3 rounded-md">
-          <p className="text-sm text-gray-500">Sharpe Ratio</p>
+          <p className="text-sm text-gray-500">Win Rate</p>
           <p className="text-2xl font-semibold text-gray-800">
-            {formatNumber(result.performance.sharpeRatio)}
+            {result.backtest_results?.trading_stats?.win_rate ? 
+              formatPercentage(result.backtest_results.trading_stats.win_rate) : 'N/A'}
           </p>
         </div>
         
         <div className="bg-gray-50 p-3 rounded-md">
-          <p className="text-sm text-gray-500">Max Drawdown</p>
-          <p className="text-2xl font-semibold text-red-600">
-            {formatPercentage(result.performance.maxDrawdown)}
+          <p className="text-sm text-gray-500">Total Trades</p>
+          <p className="text-2xl font-semibold text-gray-800">
+            {result.backtest_results?.trading_stats?.total_trades || 0}
           </p>
         </div>
         
-        {result.performance.winRate && (
-          <div className="bg-gray-50 p-3 rounded-md">
-            <p className="text-sm text-gray-500">Win Rate</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {formatPercentage(result.performance.winRate)}
-            </p>
-          </div>
-        )}
+        <div className="bg-gray-50 p-3 rounded-md">
+          <p className="text-sm text-gray-500">Profitable Trades</p>
+          <p className="text-2xl font-semibold text-green-600">
+            {result.backtest_results?.trading_stats?.profitable_trades || 0}
+          </p>
+        </div>
         
-        {result.performance.trades && (
-          <div className="bg-gray-50 p-3 rounded-md">
-            <p className="text-sm text-gray-500">Trades</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {result.performance.trades}
-            </p>
-          </div>
-        )}
+        
       </div>
 
       {/* Chart */}
