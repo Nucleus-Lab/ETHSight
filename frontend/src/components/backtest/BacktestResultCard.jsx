@@ -106,34 +106,24 @@ const BacktestResultCard = ({ result, resultId }) => {
       </div>
 
       {/* Chart */}
-      <div className="h-64 w-full">
-          <div className="h-full w-full flex items-center justify-center">
-                <p className="text-gray-500">Go to the pop-up page to view the chart</p>
-          </div>
-        {/* {plotlyData ? (
+      <div className="h-64 w-full min-h-[600px]">
+        {plotlyData ? (
           <Plot
             data={plotlyData.data}
             layout={{
               ...plotlyData.layout,
               autosize: true,
-              margin: { l: 40, r: 20, t: 20, b: 40 },
-              showlegend: true,
-              legend: {
-                orientation: 'h',
-                x: 0,
-                y: -0.2
-              },
-              paper_bgcolor: 'white',
-              plot_bgcolor: 'white',
-              xaxis: {
-                title: 'Date',
-                showgrid: false,
-              },
-              yaxis: {
-                title: 'Value ($)',
-                showgrid: true,
-                gridcolor: '#f0f0f0',
-              },
+              // Force margins to debug the right space issue
+              margin: { l: 10, r: 0, t: 80, b: 20 },
+              // showlegend: plotlyData.layout.showlegend || true,
+              // legend: plotlyData.layout.legend || {
+              //   orientation: 'h',
+              //   x: 0.01,
+              //   y: 0.95
+              // },
+              paper_bgcolor: plotlyData.layout.paper_bgcolor || 'rgb(15, 15, 15)',
+              plot_bgcolor: plotlyData.layout.plot_bgcolor || 'rgb(15, 15, 15)',
+              font: plotlyData.layout.font || { color: '#cccccc' }
             }}
             config={{
               displayModeBar: false,
@@ -142,6 +132,14 @@ const BacktestResultCard = ({ result, resultId }) => {
             style={{ width: '100%', height: '100%' }}
             onError={(err) => {
               console.error('BacktestResultCard - Plot error:', err);
+            }}
+            onInitialized={(figure, graphDiv) => {
+              console.log('Plot initialized - layout margins:', figure.layout.margin);
+              console.log('GraphDiv dimensions:', {
+                clientWidth: graphDiv.clientWidth,
+                offsetWidth: graphDiv.offsetWidth,
+                scrollWidth: graphDiv.scrollWidth
+              });
             }}
           />
         ) : result.isLiveTrade ? (
@@ -155,7 +153,7 @@ const BacktestResultCard = ({ result, resultId }) => {
           <div className="h-full w-full flex items-center justify-center">
             <p className="text-gray-500">No chart data available</p>
           </div>
-        )} */}
+        )}
       </div>
 
       {/* Signal Information */}

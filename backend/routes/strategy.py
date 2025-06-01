@@ -9,9 +9,15 @@ from backend.database import get_db
 from backend.database.signal import get_signal_by_id
 import sys
 import os
+
+# Add the backtest_utils directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from backtest_utils.main import generate_ai_indicator, use_indicator_cmd
-from types import SimpleNamespace
+
+# Import simplified interface functions
+from backtest_utils.strategy_interface import (
+    generate_indicator_from_prompt,
+    run_backtest_with_indicators
+)
 
 router = APIRouter()
 
@@ -54,6 +60,7 @@ def get_signal_info(db: Session, signal_id: int) -> SignalInfo:
     )
     
 def filter_token_info(filter_signal_name: str, filter_signal_description: str):
+    """Get token information based on filter signal"""
     msg = f"""Get the token name, token symbol, and token contract address for the token that meets the {filter_signal_name} condition: {filter_signal_description}. 
     No visualization. I just want the csv data of the contract address. 
     The csv data should have the following columns: token_name, token_symbol, token_contract_address (no need to mind the column order)
@@ -118,122 +125,90 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             timeRange=strategy.timeRange
         )
         
-        # TODO: Implement actual backtest logic here
-        # get the signal name and description for the filterSignal
+        print(f"Running backtest for strategy with signals:")
+        print(f"Filter: {filter_signal.signal_name}")
+        print(f"Buy: {buy_signal.signal_name}")
+        print(f"Sell: {sell_signal.signal_name}")
+        
+        # Get token information from filter signal
         filter_signal_name = filter_signal.signal_name
         filter_signal_description = filter_signal.signal_description
-        # get the token name, token symbol, and token contract address for the token that meets the filterSignal condition
-        # token_name, token_symbol, token_contract_address = filter_token_info(filter_signal_name, filter_signal_description)
         
-        token_name = "ETH"
+        # For now, use hardcoded values - you can uncomment the line below to use the AI agent
+        # token_name, token_symbol, token_contract_address = filter_token_info(filter_signal_name, filter_signal_description)
+        token_name = "Ethereum"
         token_symbol = "ETH"
         token_contract_address = "0x0000000000000000000000000000000000000000"
         
-        print("token_name", token_name)
-        print("token_symbol", token_symbol)
-        print("token_contract_address", token_contract_address)
+        print(f"Token: {token_name} ({token_symbol})")
         
-        # prepare the arguments for the get_ohlcv function
-        print("timerange start", strategy.timeRange['start'])
-        print("timerange end", strategy.timeRange['end'])
+        # # Generate AI indicators
+        # print("\nGenerating buy indicator...")
+        # buy_indicator_name = buy_signal.signal_name.replace(" ", "_")
+        # buy_indicator_path, buy_indicator_name = generate_indicator_from_prompt(
+        #     user_prompt=buy_signal.signal_description,
+        #     indicator_name=buy_indicator_name
+        # )
+        # print("buy_indicator_path", buy_indicator_path)
+        # print("buy_indicator_name", buy_indicator_name)
         
+        # print("\nGenerating sell indicator...")
+        # sell_indicator_name = sell_signal.signal_name.replace(" ", "_")
+        # sell_indicator_path, sell_indicator_name = generate_indicator_from_prompt(
+        #     user_prompt=sell_signal.signal_description,
+        #     indicator_name=sell_indicator_name
+        # )
+        # print("sell_indicator_path", sell_indicator_path)
+        # print("sell_indicator_name", sell_indicator_name)
         
-        ARGS = {
-            "time_start": strategy.timeRange['start'],
-            "time_end": strategy.timeRange['end'],
-            "time_period": "daily",
-            "count": 10,
-            "interval": "daily",
-            "convert": "USD"
-        }
-
-        # get the ohlcv data for the token
-        import os
-        from agents.controller import CMCAPI
-        import uuid
-        api_key = os.getenv("CMC_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="CMC_API_KEY not found in environment variables")
-        cmc = CMCAPI(api_key=api_key)
-        df = cmc.get_ohlcv(
-            symbol=token_symbol,
-            time_period=ARGS.get("time_period", "daily"),
-            time_start=ARGS["time_start"],
-            time_end=ARGS["time_end"],
-            count=ARGS.get("count", 10),
-            interval=ARGS.get("interval", "daily"),
-            convert=ARGS.get("convert", "USD")
+        # Set network and timeframe parameters
+        buy_indicator_name = "macd_line"
+        buy_indicator_path = "indicators/macd_line.py"
+        sell_indicator_name = "trading_volume"
+        sell_indicator_path = "indicators/trading_volume.py"
+        network = "eth"  # You can make this configurable
+        timeframe = "1d"  # You can make this configurable based on strategy
+        
+        # Run backtest with the generated indicators
+        print("\nRunning backtest...")
+        backtest_result = run_backtest_with_indicators(
+            network=network,
+            token_symbol=token_symbol,
+            timeframe=timeframe,
+            time_start=strategy.timeRange['start'],
+            time_end=strategy.timeRange['end'],
+            buy_indicator_name=buy_indicator_name,
+            sell_indicator_name=sell_indicator_name
         )
-        if df is not None and not df.empty:
-            # Generate a unique filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            file_id = str(uuid.uuid4())
-            file_path = f"data/cmc_data/cmc_{token_symbol}_{ARGS.get('interval', '1d')}_{timestamp}_{file_id}.csv"
-            
-            # Save to CSV
-            df.to_csv(file_path)
-            
-        print("columns", df.columns)
-            
-        print("file_path", file_path)
         
-        # prepare the buy and sell signal name, replace the space with underscore
-        buy_signal_name = buy_signal.signal_name.replace(" ", "_")
-        sell_signal_name = sell_signal.signal_name.replace(" ", "_")
-        
-        
-        # backtest function
-        # generate buy signal
-        args = SimpleNamespace(
-            description=buy_signal.signal_description,
-            name=buy_signal_name,
-            save=True,
-            output_dir='indicators',
-            model='gpt-4o',
-            api_key=None  # Will use environment variable
-        )
-        generate_ai_indicator(args)
-        
-        # generate sell signal
-        args = SimpleNamespace(
-            description=sell_signal.signal_description,
-            name=sell_signal_name,
-            save=True,
-            output_dir='indicators',
-            model='gpt-4o',
-            api_key=None  # Will use environment variable
-        )
-        generate_ai_indicator(args)
-        
-        # backtest strategy
-        # use the buy signal and sell signal to backtest the strategy
-        args = SimpleNamespace(
-            network='eth',
-            pool='0x11950d141EcB863F01007AdD7D1A342041227b58',
-            indicator=buy_signal_name,
-            sell_indicator=sell_signal_name,
-            plot=True,
-            save_json=True,
-            timeframe='day',
-            storage='csv',
-            data_dir='data',
-            indicators_dir='indicators',
-            buy_column=None,
-            sell_column=None,
-            aggregate=1,
-            save_chart=False,
-            chart_dir='charts',
-            json_dir='json_charts',
-            resample=None,
-            file_path=file_path
-        )
-        fig = use_indicator_cmd(args)
-        print("fig", fig)
-
+        # Return comprehensive result
         return {
             "status": "success",
             "strategy": complete_strategy,
-            "fig": fig,
+            "fig": backtest_result['plotly_figure'],
+            "backtest_results": {
+                "trading_stats": backtest_result['trading_stats'],
+                "plotly_figure": backtest_result['plotly_figure'],
+                "data_points": backtest_result['data_points'],
+                "time_range": backtest_result['time_range']
+            },
+            "indicators": {
+                "buy_indicator": {
+                    "name": buy_indicator_name,
+                    "path": buy_indicator_path,
+                    "info": backtest_result.get('buy_indicator_info')
+                },
+                "sell_indicator": {
+                    "name": sell_indicator_name,
+                    "path": sell_indicator_path,
+                    "info": backtest_result.get('sell_indicator_info')
+                }
+            },
+            "token_info": {
+                "name": token_name,
+                "symbol": token_symbol,
+                "contract_address": token_contract_address
+            },
             "results": {
                 "filterSignal": {
                     "id": filter_signal.signal_id,
@@ -258,7 +233,7 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error running backtest: {str(e)}")
         print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to run backtest")
+        raise HTTPException(status_code=500, detail=f"Failed to run backtest: {str(e)}")
 
 @router.post("/strategy/trade")
 async def execute_trade(strategy: StrategyModel, db: Session = Depends(get_db)):
