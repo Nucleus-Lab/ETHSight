@@ -1,6 +1,12 @@
+# files for building a docs
+build/*
+source/*
+
+# files for development
 data/*
 archive/*
 .env
 test.ipynb
 indicators/*
 json_charts/*
+backtest_utils/json_charts/*
