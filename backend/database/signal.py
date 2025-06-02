@@ -51,6 +51,35 @@ def update_signal(db, signal_id: int, signal_name: str, signal_description: str)
     db.refresh(signal)
     return signal
 
+# Update signal code
+def update_signal_code(db, signal_id: int, signal_code: str) -> Optional[SignalDB]:
+    """Update the code for a specific signal"""
+    signal = db.query(SignalDB).filter(SignalDB.signal_id == signal_id).first()
+    if not signal:
+        return None
+    
+    signal.signal_code = signal_code
+    db.commit()
+    db.refresh(signal)
+    print(f"Updated code for signal {signal_id}: {signal.signal_name}")
+    return signal
+
+# Get signal code by ID
+def get_signal_code(db, signal_id: int) -> Optional[str]:
+    """Get the code for a specific signal"""
+    signal = db.query(SignalDB).filter(SignalDB.signal_id == signal_id).first()
+    if not signal:
+        return None
+    return signal.signal_code
+
+# Check if signal has code
+def signal_has_code(db, signal_id: int) -> bool:
+    """Check if a signal has generated code stored"""
+    signal = db.query(SignalDB).filter(SignalDB.signal_id == signal_id).first()
+    if not signal:
+        return False
+    return signal.signal_code is not None and signal.signal_code.strip() != ""
+
 # Delete a signal
 def delete_signal(db, signal_id: int) -> bool:
     """Delete a signal by its ID"""

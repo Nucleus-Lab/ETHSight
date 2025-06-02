@@ -158,7 +158,47 @@ def use_indicator(df, indicator_name, indicators_dir):
     
     return result_df, indicator_info
 
-def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None, sell_column=None, indicators_dir='indicators'):
+def use_indicator_code(df, indicator_code, indicator_name):
+    """
+    使用指标代码直接应用到DataFrame
+    
+    参数:
+        df: 数据框
+        indicator_code: 指标代码字符串
+        indicator_name: 指标名称
+        
+    返回:
+        (result_df, indicator_info): 应用指标后的数据框和指标信息
+    """
+    # 创建指标信息
+    indicator_info = {
+        'name': indicator_name,
+        'path': 'database',
+        'code': indicator_code,
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    
+    # 创建数据框的副本
+    result_df = df.copy()
+    
+    # 记录原始列
+    original_columns = set(result_df.columns)
+    
+    # 执行指标代码
+    exec_globals = {'df': result_df, 'np': np, 'pd': pd}
+    try:
+        exec(indicator_code, exec_globals)
+        result_df = exec_globals.get('df', result_df)
+    except Exception as e:
+        raise RuntimeError(f"执行指标代码时出错: {str(e)}")
+    
+    # 确定新增列
+    new_columns = [col for col in result_df.columns if col not in original_columns]
+    indicator_info['new_columns'] = new_columns
+    
+    return result_df, indicator_info
+
+def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None, sell_column=None, indicators_dir='indicators', use_existing_indicators=False):
     """
     回测指标组合
     
@@ -169,44 +209,71 @@ def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None,
         buy_column: 买入信号列名，如果不提供则自动识别
         sell_column: 卖出信号列名，如果不提供则自动识别
         indicators_dir: 指标目录
+        use_existing_indicators: 是否使用已应用到DataFrame的指标，跳过文件查找
         
     返回:
         (result_df, buy_indicator_info, sell_indicator_info, stats): 结果数据框、买入指标信息、卖出指标信息、统计信息
     """
-    # 应用买入指标
-    result_df, buy_indicator_info = use_indicator(df, buy_indicator, indicators_dir)
-    
-    # 保存买入指标的买入信号
-    buy_signal_backup = None
-    if 'buy_signal' in result_df.columns:
-        buy_signal_backup = result_df['buy_signal'].copy()
-        print(f"备份买入信号，共有 {buy_signal_backup.sum()} 个买入信号")
-    
-    # 如果指定了卖出指标，则应用卖出指标
-    sell_indicator_info = None
-    if sell_indicator:
-        # 保存买入指标的列
-        buy_columns = buy_indicator_info['new_columns']
+    if use_existing_indicators:
+        # 使用已经应用到DataFrame的指标，跳过文件查找
+        print(f"使用已应用的指标，跳过文件查找")
+        result_df = df.copy()
         
-        # 应用卖出指标
-        result_df, sell_indicator_info = use_indicator(df, sell_indicator, indicators_dir)
+        # 创建买入指标信息
+        buy_indicator_info = {
+            'name': buy_indicator,
+            'path': 'database',
+            'code': 'stored_in_database',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'new_columns': [col for col in result_df.columns if 'buy' in col.lower() or 'signal' in col.lower()]
+        }
         
-        # 恢复买入信号
-        if buy_signal_backup is not None:
-            # 如果卖出指标也创建了buy_signal列，合并两个信号
-            if 'buy_signal' in result_df.columns:
-                # 使用逻辑或合并买入信号
-                result_df['buy_signal'] = (result_df['buy_signal'] | buy_signal_backup).astype(int)
-                print(f"合并后的买入信号数量: {result_df['buy_signal'].sum()}")
-            else:
-                result_df['buy_signal'] = buy_signal_backup
+        # 创建卖出指标信息
+        sell_indicator_info = None
+        if sell_indicator:
+            sell_indicator_info = {
+                'name': sell_indicator,
+                'path': 'database', 
+                'code': 'stored_in_database',
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'new_columns': [col for col in result_df.columns if 'sell' in col.lower()]
+            }
+    else:
+        # 原有的文件查找逻辑
+        # 应用买入指标
+        result_df, buy_indicator_info = use_indicator(df, buy_indicator, indicators_dir)
         
-        # 将买入指标的其他列添加回结果中
-        for col in buy_columns:
-            if col not in result_df.columns and col != 'buy_signal':
-                # 从原始结果中获取买入指标列
-                tmp_df, _ = use_indicator(df, buy_indicator, indicators_dir)
-                result_df[col] = tmp_df[col]
+        # 保存买入指标的买入信号
+        buy_signal_backup = None
+        if 'buy_signal' in result_df.columns:
+            buy_signal_backup = result_df['buy_signal'].copy()
+            print(f"备份买入信号，共有 {buy_signal_backup.sum()} 个买入信号")
+        
+        # 如果指定了卖出指标，则应用卖出指标
+        sell_indicator_info = None
+        if sell_indicator:
+            # 保存买入指标的列
+            buy_columns = buy_indicator_info['new_columns']
+            
+            # 应用卖出指标
+            result_df, sell_indicator_info = use_indicator(df, sell_indicator, indicators_dir)
+            
+            # 恢复买入信号
+            if buy_signal_backup is not None:
+                # 如果卖出指标也创建了buy_signal列，合并两个信号
+                if 'buy_signal' in result_df.columns:
+                    # 使用逻辑或合并买入信号
+                    result_df['buy_signal'] = (result_df['buy_signal'] | buy_signal_backup).astype(int)
+                    print(f"合并后的买入信号数量: {result_df['buy_signal'].sum()}")
+                else:
+                    result_df['buy_signal'] = buy_signal_backup
+            
+            # 将买入指标的其他列添加回结果中
+            for col in buy_columns:
+                if col not in result_df.columns and col != 'buy_signal':
+                    # 从原始结果中获取买入指标列
+                    tmp_df, _ = use_indicator(df, buy_indicator, indicators_dir)
+                    result_df[col] = tmp_df[col]
     
     # 提取信号列
     if buy_column and buy_column in result_df.columns:

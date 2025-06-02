@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import traceback
 from backend.database import get_db
-from backend.database.signal import get_signal_by_id
+from backend.database.signal import get_signal_by_id, update_signal_code, get_signal_code, signal_has_code
 from backend.database.user import get_user, create_user
 from backend.database.strategy import create_strategy
 import sys
@@ -18,7 +18,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 # Import simplified interface functions
 from backtest_utils.strategy_interface import (
     generate_indicator_from_prompt,
-    run_backtest_with_indicators
+    run_backtest_with_indicators,
+    generate_indicator_code_from_prompt
 )
 
 router = APIRouter()
@@ -101,6 +102,51 @@ def filter_token_info(filter_signal_name: str, filter_signal_description: str):
                 break
     return token_name, token_symbol, token_contract_address
 
+def build_prompt_for_generate_indicator(is_buy_signal: bool, signal_name: str, signal_operator: str, signal_threshold: float, signal_description: str):
+    """Build prompt for generate indicator"""
+    prompt = f"""
+        Generate a {"buy" if is_buy_signal else "sell"} indicator for the signal where the condition is {signal_name} {signal_operator} {signal_threshold}.
+        Description of the signal: {signal_description}
+        """
+    return prompt
+
+def get_or_generate_signal_code(db: Session, signal_id: int, is_buy_signal: bool, operator: str, threshold: float) -> str:
+    """Get signal code from database or generate if not exists"""
+    # Check if signal has code in database
+    if signal_has_code(db, signal_id):
+        print(f"Using cached code for signal {signal_id}")
+        return get_signal_code(db, signal_id)
+    
+    # Generate new code if not in database
+    signal = get_signal_by_id(db, signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found")
+    
+    print(f"Generating new code for signal {signal_id}: {signal.signal_name}")
+    
+    # Build prompt for the signal
+    prompt = build_prompt_for_generate_indicator(
+        is_buy_signal=is_buy_signal,
+        signal_name=signal.signal_name,
+        signal_operator=operator,
+        signal_threshold=threshold,
+        signal_description=signal.signal_description
+    )
+    
+    try:
+        # Generate the indicator code
+        code = generate_indicator_code_from_prompt(prompt)
+        
+        # Store the code in database
+        update_signal_code(db, signal_id, code)
+        
+        print(f"Generated and cached code for signal {signal_id}")
+        return code
+        
+    except Exception as e:
+        print(f"Error generating code for signal {signal_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate indicator code: {str(e)}")
+
 @router.post("/strategy/backtest")
 async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
     """Run backtest with the given strategy"""
@@ -168,30 +214,18 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
         
         print(f"Token: {token_name} ({token_symbol})")
         
-        # # Generate AI indicators
-        # print("\nGenerating buy indicator...")
-        # buy_indicator_name = buy_signal.signal_name.replace(" ", "_")
-        # buy_indicator_path, buy_indicator_name = generate_indicator_from_prompt(
-        #     user_prompt=buy_signal.signal_description,
-        #     indicator_name=buy_indicator_name
-        # )
-        # print("buy_indicator_path", buy_indicator_path)
-        # print("buy_indicator_name", buy_indicator_name)
+        # Generate AI indicators
+        print("\nGenerating buy indicator...")
+        buy_indicator_name = buy_signal.signal_name.replace(" ", "_")
+        buy_indicator_code = get_or_generate_signal_code(db, strategy.buyCondition.signal_id, True, strategy.buyCondition.operator, strategy.buyCondition.threshold)
+        print("buy_indicator_code generated for:", buy_indicator_name)
         
-        # print("\nGenerating sell indicator...")
-        # sell_indicator_name = sell_signal.signal_name.replace(" ", "_")
-        # sell_indicator_path, sell_indicator_name = generate_indicator_from_prompt(
-        #     user_prompt=sell_signal.signal_description,
-        #     indicator_name=sell_indicator_name
-        # )
-        # print("sell_indicator_path", sell_indicator_path)
-        # print("sell_indicator_name", sell_indicator_name)
+        print("\nGenerating sell indicator...")
+        sell_indicator_name = sell_signal.signal_name.replace(" ", "_")
+        sell_indicator_code = get_or_generate_signal_code(db, strategy.sellCondition.signal_id, False, strategy.sellCondition.operator, strategy.sellCondition.threshold)
+        print("sell_indicator_code generated for:", sell_indicator_name)
         
         # Set network and timeframe parameters
-        buy_indicator_name = "macd_line"
-        buy_indicator_path = "indicators/macd_line.py"
-        sell_indicator_name = "trading_volume"
-        sell_indicator_path = "indicators/trading_volume.py"
         network = "eth"  # You can make this configurable
         timeframe = "1d"  # You can make this configurable based on strategy
         
@@ -203,6 +237,8 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             timeframe=timeframe,
             time_start=strategy.timeRange['start'],
             time_end=strategy.timeRange['end'],
+            buy_indicator_code=buy_indicator_code,
+            sell_indicator_code=sell_indicator_code,
             buy_indicator_name=buy_indicator_name,
             sell_indicator_name=sell_indicator_name
         )
@@ -228,12 +264,12 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             "indicators": {
                 "buy_indicator": {
                     "name": buy_indicator_name,
-                    "path": buy_indicator_path,
+                    "code": buy_indicator_code,
                     "info": backtest_result.get('buy_indicator_info')
                 },
                 "sell_indicator": {
                     "name": sell_indicator_name,
-                    "path": sell_indicator_path,
+                    "code": sell_indicator_code,
                     "info": backtest_result.get('sell_indicator_info')
                 }
             },

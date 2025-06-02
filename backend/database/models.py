@@ -68,6 +68,7 @@ class SignalDB(Base):
     canvas_id = Column(Integer, ForeignKey("canvases.canvas_id"))
     signal_name = Column(String)
     signal_description = Column(Text)
+    signal_code = Column(Text, nullable=True)  # Store the generated indicator code
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 import pandas as pd
+import numpy as np
 
 # Add the parent directory to the path to import backtest_utils modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,6 +23,40 @@ from backtest_utils.geckoterminal_backtracker.analysis.ai_indicator_runner impor
 from backtest_utils.geckoterminal_backtracker.analysis.indicator_backtester import (
     find_indicator_file, backtest_indicators, plot_backtest_results, resample_ohlc
 )
+
+
+def generate_indicator_code_from_prompt(prompt: str, model: str = 'gpt-4o', api_key: str = None) -> str:
+    """
+    Generate indicator code from natural language prompt
+    
+    Args:
+        prompt (str): Natural language description of the indicator
+        model (str): OpenAI model to use (default: 'gpt-4o')
+        api_key (str, optional): OpenAI API key. If None, uses environment variable
+        
+    Returns:
+        str: Generated Python indicator code
+    """
+    print(f"Generating indicator code from prompt...")
+    print(f"Prompt: {prompt}")
+    print(f"Model: {model}")
+    
+    try:
+        # Import AIIndicatorGenerator here to avoid circular imports
+        from backtest_utils.geckoterminal_backtracker.analysis.ai_indicator_generator import AIIndicatorGenerator
+        
+        # Initialize the generator
+        generator = AIIndicatorGenerator(api_key=api_key)
+        
+        # Generate the indicator code
+        code = generator.generate_indicator_code(prompt, model)
+        
+        print("Successfully generated indicator code")
+        return code
+        
+    except Exception as e:
+        print(f"Error generating indicator code: {str(e)}")
+        raise Exception(f"Failed to generate indicator code: {str(e)}")
 
 
 def generate_indicator_from_prompt(user_prompt: str, indicator_name: str, api_key: str = None, model: str = 'gpt-4o'):
@@ -220,61 +255,104 @@ def run_backtest_with_indicators(
     timeframe: str, 
     time_start: str, 
     time_end: str,
-    buy_indicator_name: str,
+    buy_indicator_code: str,
+    sell_indicator_code: str = None,
+    buy_indicator_name: str = None,
     sell_indicator_name: str = None
 ):
     """
-    Run backtest with given indicators
+    Run backtest with provided indicator codes
     
     Args:
-        network (str): Network ID (e.g., 'eth', 'bsc')
-        token_symbol (str): Token symbol
-        timeframe (str): Timeframe (e.g., '1m', '15m', '1h', '1d')
+        network (str): Network to fetch data from (e.g., 'eth', 'bsc')
+        token_symbol (str): Token symbol (e.g., 'ETH', 'BTC')
+        timeframe (str): Timeframe for OHLC data (e.g., '1m', '15m', '1h', '1d')
         time_start (str): Start time in ISO format
         time_end (str): End time in ISO format
-        buy_indicator_name (str): Name of buy indicator
-        sell_indicator_name (str, optional): Name of sell indicator
+        buy_indicator_code (str): Python code for buy indicator
+        sell_indicator_code (str, optional): Python code for sell indicator
+        buy_indicator_name (str, optional): Name for buy indicator
+        sell_indicator_name (str, optional): Name for sell indicator
         
     Returns:
-        dict: Dictionary containing trading stats and plotly figure JSON
+        dict: Dictionary containing backtest results
     """
+    print(f"Running backtest for {network}:{token_symbol} ({timeframe})")
+    print(f"Time range: {time_start} to {time_end}")
+    
+    # Set default names if not provided
+    if not buy_indicator_name:
+        buy_indicator_name = "buy_indicator"
+    if not sell_indicator_name and sell_indicator_code:
+        sell_indicator_name = "sell_indicator"
+    
     try:
-        print(f"Running backtest for {token_symbol} on {network}")
-        
         # Step 1: Search for pool address
         pool_address = search_and_get_pool_address(network, token_symbol)
+        print(f"Found pool address: {pool_address}")
         
         # Step 2: Fetch OHLC data
+        csv_dir = 'data_csv'
+        os.makedirs(csv_dir, exist_ok=True)
+        
+        csv_filename = f"{network}_{token_symbol}_{timeframe}.csv"
+        csv_path = os.path.join(csv_dir, csv_filename)
+        
+        # fetch_ohlc_data returns a file path, not a DataFrame
         data_file_path = fetch_ohlc_data(network, pool_address, timeframe, time_start, time_end)
         
-        # Step 3: Load data from CSV
+        # Read the CSV file to get the DataFrame
+        print(f"Reading data from: {data_file_path}")
         df = pd.read_csv(data_file_path)
+        
+        print(f"DataFrame columns before sorting: {list(df.columns)}")
         
         # Ensure datetime column exists and is properly formatted
         if 'datetime' not in df.columns:
+            print("datetime not in df.columns")
             if 'timestamp' in df.columns:
+                print(f"Timestamp column in df")
                 df['datetime'] = pd.to_datetime(df['timestamp'])
             else:
+                print("timestamp not in df.columns")
                 # Create datetime from index if needed
                 df['datetime'] = pd.to_datetime(df.index)
         else:
+            print("datetime in df.columns")
             df['datetime'] = pd.to_datetime(df['datetime'])
+            
+        # Sort by datetime and set as index
+        df = df.sort_values('datetime')
+        print(f"DataFrame columns after sorting: {list(df.columns)}")
         
-        # Sort by datetime
-        df = df.sort_values('datetime').reset_index(drop=True)
+        if df.empty:
+            raise Exception("No data available for the specified time range")
+            
+        print(f"Loaded {len(df)} data points")
         
-        # Step 4: Find indicator files
-        indicators_dir = 'indicators'
+        # Step 3: Apply indicators using provided codes
+        print(f"Applying buy indicator: {buy_indicator_name}")
+        df = apply_indicator_code(df, buy_indicator_code, buy_indicator_name)
+        print(f"DataFrame columns after buy indicator: {list(df.columns)}")
         
-        buy_indicator_file = find_indicator_file(buy_indicator_name, indicators_dir)
-        if not buy_indicator_file:
-            raise Exception(f"Buy indicator '{buy_indicator_name}' not found")
+        sell_indicator_info = None
+        if sell_indicator_code:
+            print(f"Applying sell indicator: {sell_indicator_name}")
+            df = apply_indicator_code(df, sell_indicator_code, sell_indicator_name)
+            print(f"DataFrame columns after sell indicator: {list(df.columns)}")
+            sell_indicator_info = {"name": sell_indicator_name}
         
-        sell_indicator_file = None
-        if sell_indicator_name:
-            sell_indicator_file = find_indicator_file(sell_indicator_name, indicators_dir)
-            if not sell_indicator_file:
-                raise Exception(f"Sell indicator '{sell_indicator_name}' not found")
+        buy_indicator_info = {"name": buy_indicator_name}
+        
+        # Check for signal columns
+        signal_columns = [col for col in df.columns if 'signal' in col.lower()]
+        print(f"Available signal columns: {signal_columns}")
+        
+        # Show sample of signal data
+        for col in signal_columns:
+            if col in df.columns:
+                signal_count = df[col].sum() if df[col].dtype in ['int64', 'int32', 'bool'] else 'N/A'
+                print(f"Signal column '{col}' has {signal_count} signals")
         
         # Step 5: Run backtest
         result_df, buy_indicator_info, sell_indicator_info, stats, buy_signal_columns, sell_signal_columns = backtest_indicators(
@@ -283,10 +361,11 @@ def run_backtest_with_indicators(
             sell_indicator_name, 
             None,  # buy_column (auto-detect)
             None,  # sell_column (auto-detect)
-            indicators_dir
+            'indicators',  # indicators_dir (not used when use_existing_indicators=True)
+            use_existing_indicators=True  # Use indicators already applied to DataFrame
         )
         
-        # Step 6: Generate plot
+        # Step 5: Generate plot
         json_dir = 'json_charts'
         os.makedirs(json_dir, exist_ok=True)
         
@@ -316,26 +395,46 @@ def run_backtest_with_indicators(
             aggregate=1
         )
         
-        # Prepare result
-        result = {
+        # Convert figure to JSON
+        plotly_json = fig.to_json()
+        
+        print(f"Backtest completed successfully")
+        print(f"Trading stats: {stats}")
+        
+        return {
             'trading_stats': stats,
-            'plotly_figure': fig.to_json() if fig else None,
+            'plotly_figure': plotly_json,
             'buy_indicator_info': buy_indicator_info,
             'sell_indicator_info': sell_indicator_info,
-            'data_points': len(result_df),
+            'data_points': len(df),
             'time_range': {
-                'start': df['datetime'].min().isoformat(),
-                'end': df['datetime'].max().isoformat()
+                'start': df.iloc[0]['datetime'].isoformat() if not df.empty else time_start,
+                'end': df.iloc[-1]['datetime'].isoformat() if not df.empty else time_end
             }
         }
         
-        print("Backtest completed successfully")
-        print(f"Trading stats: {stats}")
-        
-        return result
-        
     except Exception as e:
-        print(f"Error running backtest: {str(e)}")
+        print(f"Error in backtest: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise 
+        raise
+
+def apply_indicator_code(df: pd.DataFrame, indicator_code: str, indicator_name: str) -> pd.DataFrame:
+    """Apply indicator code to DataFrame"""
+    try:
+        # Create a local namespace for execution
+        local_vars = {'df': df.copy(), 'pd': pd, 'np': np}
+        
+        print("indicator_code in apply_indicator_code: ", indicator_code)
+        
+        # Execute the indicator code
+        exec(indicator_code, globals(), local_vars)
+        
+        # Return the modified DataFrame
+        return local_vars['df']
+        
+    except Exception as e:
+        print(f"Error applying indicator {indicator_name}: {e}")
+        raise Exception(f"Failed to apply indicator {indicator_name}: {str(e)}")
+
+# Removed unused backtest_indicators_with_df function - now using backtest_indicators with use_existing_indicators=True 

@@ -78,7 +78,7 @@ def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optiona
             continue
             
         # 跳过所有MACD相关指标，避免它们被添加到价格图上
-        if 'macd' in ind.lower() or 'signal_line' in ind.lower():
+        if 'macd' in ind.lower() or 'macd_signal' in ind.lower():
             print(f"跳过MACD指标: {ind}")
             continue
             
@@ -273,7 +273,7 @@ def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optiona
     fig.add_trace(
         go.Scatter(
             x=df['datetime'],
-            y=df['signal_line'],
+            y=df['macd_signal'],
             name='Signal Line',
             line=dict(color='#FFA500', width=2),  # 橙色线条
             showlegend=False
