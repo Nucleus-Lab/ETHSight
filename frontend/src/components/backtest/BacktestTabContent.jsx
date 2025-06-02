@@ -15,7 +15,7 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
   const tabs = [
     { id: 'results', label: 'Results' },
     { id: 'strategies', label: 'Strategies' },
-    { id: 'history', label: 'History' },
+    { id: 'history', label: 'Backtest History' },
   ];
 
   const renderContent = () => {
