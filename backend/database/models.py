@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text, Float
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -13,6 +13,7 @@ class UserDB(Base):
     # Relationships
     canvases = relationship("CanvasDB", back_populates="user")
     strategies = relationship("StrategyDB", back_populates="user")
+    backtest_histories = relationship("BacktestHistoryDB", back_populates="user")
 
     def to_dict(self):
         return {
@@ -104,6 +105,7 @@ class StrategyDB(Base):
     filter_signal = relationship("SignalDB", foreign_keys=[filter_signal_id])
     buy_signal = relationship("SignalDB", foreign_keys=[buy_condition_signal_id])
     sell_signal = relationship("SignalDB", foreign_keys=[sell_condition_signal_id])
+    backtest_histories = relationship("BacktestHistoryDB", back_populates="strategy")
 
     def to_dict(self):
         return {
@@ -118,5 +120,58 @@ class StrategyDB(Base):
             "sell_condition_threshold": self.sell_condition_threshold,
             "position_size": self.position_size,
             "max_position_value": self.max_position_value,
+            "created_at": self.created_at
+        }
+
+class BacktestHistoryDB(Base):
+    __tablename__ = "backtest_histories"
+    
+    backtest_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"))
+    strategy_id = Column(Integer, ForeignKey("strategies.strategy_id"))
+    
+    # Backtest time range
+    time_start = Column(DateTime)
+    time_end = Column(DateTime)
+    
+    # Trading statistics
+    total_return = Column(Float)
+    avg_return = Column(Float)
+    win_rate = Column(Float)
+    total_trades = Column(Integer)
+    profitable_trades = Column(Integer)
+    
+    # Additional backtest metadata
+    data_points = Column(Integer)
+    network = Column(String)
+    token_symbol = Column(String)
+    timeframe = Column(String)
+    
+    # Store complete trading stats as JSON for flexibility
+    trading_stats_json = Column(JSON)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("UserDB", back_populates="backtest_histories")
+    strategy = relationship("StrategyDB", back_populates="backtest_histories")
+
+    def to_dict(self):
+        return {
+            "backtest_id": self.backtest_id,
+            "user_id": self.user_id,
+            "strategy_id": self.strategy_id,
+            "time_start": self.time_start,
+            "time_end": self.time_end,
+            "total_return": self.total_return,
+            "avg_return": self.avg_return,
+            "win_rate": self.win_rate,
+            "total_trades": self.total_trades,
+            "profitable_trades": self.profitable_trades,
+            "data_points": self.data_points,
+            "network": self.network,
+            "token_symbol": self.token_symbol,
+            "timeframe": self.timeframe,
+            "trading_stats_json": self.trading_stats_json,
             "created_at": self.created_at
         } 

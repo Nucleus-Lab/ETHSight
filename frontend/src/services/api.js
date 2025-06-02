@@ -421,3 +421,29 @@ export const getUserStrategies = async (walletAddress) => {
     throw error;
   }
 };
+
+export const getUserBacktestHistories = async (walletAddress, limit = 50) => {
+  try {
+    console.log('Fetching backtest histories for wallet:', walletAddress);
+    
+    const response = await fetch(`${BACKEND_API_BASE_URL}/backtest-history/user/${encodeURIComponent(walletAddress)}?limit=${limit}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('User backtest histories response:', data);
+    
+    return data.backtest_histories || [];
+  } catch (error) {
+    console.error('Error fetching backtest histories:', error);
+    throw error;
+  }
+};

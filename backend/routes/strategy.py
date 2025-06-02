@@ -9,6 +9,7 @@ from backend.database import get_db
 from backend.database.signal import get_signal_by_id, update_signal_code, get_signal_code, signal_has_code
 from backend.database.user import get_user, create_user
 from backend.database.strategy import create_strategy
+from backend.database.backtest_history import create_backtest_history
 import sys
 import os
 
@@ -249,6 +250,25 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             print(key)
             print(result)
         
+        # Save backtest history to database
+        try:
+            backtest_history = create_backtest_history(
+                db=db,
+                user_id=user.user_id,
+                strategy_id=saved_strategy.strategy_id,
+                time_start=strategy.timeRange['start'],
+                time_end=strategy.timeRange['end'],
+                trading_stats=backtest_result['trading_stats'],
+                data_points=backtest_result.get('data_points'),
+                network=network,
+                token_symbol=token_symbol,
+                timeframe=timeframe
+            )
+            print(f"Saved backtest history with ID: {backtest_history.backtest_id}")
+        except Exception as e:
+            print(f"Warning: Failed to save backtest history: {e}")
+            # Don't fail the entire request if history saving fails
+        
         # Return comprehensive result
         return {
             "status": "success",
@@ -427,4 +447,88 @@ async def get_user_strategies(wallet_address: str, db: Session = Depends(get_db)
     except Exception as e:
         print(f"Error fetching user strategies: {str(e)}")
         print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to fetch strategies: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to fetch strategies: {str(e)}")
+
+@router.get("/backtest-history/user/{wallet_address}")
+async def get_user_backtest_histories(wallet_address: str, limit: int = 50, db: Session = Depends(get_db)):
+    """Get backtest histories for a specific user"""
+    try:
+        # Get user from wallet address
+        user = get_user(db, wallet_address)
+        if not user:
+            return {
+                "status": "success",
+                "backtest_histories": []
+            }
+        
+        # Get backtest histories for the user
+        from backend.database.backtest_history import get_backtest_histories_by_user
+        histories = get_backtest_histories_by_user(db, user.user_id, limit)
+        
+        # Format backtest histories with strategy information
+        formatted_histories = []
+        for history in histories:
+            try:
+                # Get strategy information
+                from backend.database.strategy import get_strategy_by_id
+                strategy = get_strategy_by_id(db, history.strategy_id)
+                
+                if strategy:
+                    # Get signal information for the strategy
+                    filter_signal = get_signal_info(db, strategy.filter_signal_id)
+                    buy_signal = get_signal_info(db, strategy.buy_condition_signal_id)
+                    sell_signal = get_signal_info(db, strategy.sell_condition_signal_id)
+                    
+                    formatted_history = {
+                        "backtest_id": history.backtest_id,
+                        "strategy_id": history.strategy_id,
+                        "time_start": history.time_start.isoformat(),
+                        "time_end": history.time_end.isoformat(),
+                        "total_return": history.total_return,
+                        "avg_return": history.avg_return,
+                        "win_rate": history.win_rate,
+                        "total_trades": history.total_trades,
+                        "profitable_trades": history.profitable_trades,
+                        "data_points": history.data_points,
+                        "network": history.network,
+                        "token_symbol": history.token_symbol,
+                        "timeframe": history.timeframe,
+                        "created_at": history.created_at.isoformat(),
+                        "strategy": {
+                            "filter_condition": {
+                                "signal_name": filter_signal.signal_name,
+                                "signal_description": filter_signal.signal_description
+                            },
+                            "buy_condition": {
+                                "signal_name": buy_signal.signal_name,
+                                "signal_description": buy_signal.signal_description,
+                                "operator": strategy.buy_condition_operator,
+                                "threshold": strategy.buy_condition_threshold
+                            },
+                            "sell_condition": {
+                                "signal_name": sell_signal.signal_name,
+                                "signal_description": sell_signal.signal_description,
+                                "operator": strategy.sell_condition_operator,
+                                "threshold": strategy.sell_condition_threshold
+                            },
+                            "position_size": strategy.position_size,
+                            "max_position_value": strategy.max_position_value
+                        }
+                    }
+                    formatted_histories.append(formatted_history)
+                
+            except Exception as e:
+                print(f"Error formatting backtest history {history.backtest_id}: {e}")
+                continue
+        
+        print(f"Retrieved {len(formatted_histories)} backtest histories for user {user.user_id}")
+        
+        return {
+            "status": "success",
+            "backtest_histories": formatted_histories
+        }
+        
+    except Exception as e:
+        print(f"Error fetching backtest histories: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to fetch backtest histories: {str(e)}") 
