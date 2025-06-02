@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 import traceback
 from backend.database import get_db
 from backend.database.signal import get_signal_by_id
+from backend.database.user import get_user, create_user
+from backend.database.strategy import create_strategy
 import sys
 import os
 
@@ -33,6 +35,7 @@ class StrategyModel(BaseModel):
     positionSize: float
     maxPositionValue: float
     timeRange: Dict[str, str]
+    wallet_address: str
 
 class SignalInfo(BaseModel):
     signal_id: int
@@ -102,6 +105,29 @@ def filter_token_info(filter_signal_name: str, filter_signal_description: str):
 async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
     """Run backtest with the given strategy"""
     try:
+        # Get or create user from wallet address
+        user = get_user(db, strategy.wallet_address)
+        if not user:
+            user = create_user(db, strategy.wallet_address)
+            print(f"Created new user for wallet: {strategy.wallet_address}")
+
+        # Save strategy to database before running backtest
+        saved_strategy = create_strategy(
+            db=db,
+            user_id=user.user_id,
+            filter_signal_id=strategy.filterSignal_id,
+            buy_condition_signal_id=strategy.buyCondition.signal_id,
+            buy_condition_operator=strategy.buyCondition.operator,
+            buy_condition_threshold=strategy.buyCondition.threshold,
+            sell_condition_signal_id=strategy.sellCondition.signal_id,
+            sell_condition_operator=strategy.sellCondition.operator,
+            sell_condition_threshold=strategy.sellCondition.threshold,
+            position_size=strategy.positionSize,
+            max_position_value=strategy.maxPositionValue
+        )
+        
+        print(f"Strategy saved to database with ID: {saved_strategy.strategy_id}")
+        
         # Get signal information for each signal in the strategy
         filter_signal = get_signal_info(db, strategy.filterSignal_id)
         buy_signal = get_signal_info(db, strategy.buyCondition.signal_id)
@@ -190,6 +216,7 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
         # Return comprehensive result
         return {
             "status": "success",
+            "strategy_id": saved_strategy.strategy_id,
             "strategy": complete_strategy,
             "fig": backtest_result['plotly_figure'],
             "backtest_results": {
@@ -296,4 +323,72 @@ async def execute_trade(strategy: StrategyModel, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         print(f"Error executing trade: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to execute trade") 
+        raise HTTPException(status_code=500, detail="Failed to execute trade")
+
+@router.get("/strategy/user/{wallet_address}")
+async def get_user_strategies(wallet_address: str, db: Session = Depends(get_db)):
+    """Get all strategies for a specific user"""
+    try:
+        # Get user from wallet address
+        user = get_user(db, wallet_address)
+        if not user:
+            return {
+                "status": "success",
+                "strategies": []
+            }
+        
+        # Get strategies for the user
+        from backend.database.strategy import get_strategies_by_user
+        strategies = get_strategies_by_user(db, user.user_id)
+        
+        # Format strategies with signal information
+        formatted_strategies = []
+        for strategy in strategies:
+            try:
+                # Get signal information for each condition
+                filter_signal = get_signal_info(db, strategy.filter_signal_id)
+                buy_signal = get_signal_info(db, strategy.buy_condition_signal_id)
+                sell_signal = get_signal_info(db, strategy.sell_condition_signal_id)
+                
+                formatted_strategy = {
+                    "strategy_id": strategy.strategy_id,
+                    "created_at": strategy.created_at.isoformat(),
+                    "position_size": strategy.position_size,
+                    "max_position_value": strategy.max_position_value,
+                    "filter_condition": {
+                        "signal_id": filter_signal.signal_id,
+                        "signal_name": filter_signal.signal_name,
+                        "signal_description": filter_signal.signal_description
+                    },
+                    "buy_condition": {
+                        "signal_id": buy_signal.signal_id,
+                        "signal_name": buy_signal.signal_name,
+                        "signal_description": buy_signal.signal_description,
+                        "operator": strategy.buy_condition_operator,
+                        "threshold": strategy.buy_condition_threshold
+                    },
+                    "sell_condition": {
+                        "signal_id": sell_signal.signal_id,
+                        "signal_name": sell_signal.signal_name,
+                        "signal_description": sell_signal.signal_description,
+                        "operator": strategy.sell_condition_operator,
+                        "threshold": strategy.sell_condition_threshold
+                    }
+                }
+                formatted_strategies.append(formatted_strategy)
+                
+            except Exception as e:
+                print(f"Error formatting strategy {strategy.strategy_id}: {e}")
+                continue
+        
+        print(f"Retrieved {len(formatted_strategies)} strategies for user {user.user_id}")
+        
+        return {
+            "status": "success",
+            "strategies": formatted_strategies
+        }
+        
+    except Exception as e:
+        print(f"Error fetching user strategies: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to fetch strategies: {str(e)}") 

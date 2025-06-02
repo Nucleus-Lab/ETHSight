@@ -36,11 +36,8 @@ function BacktestTrade() {
       setActiveTab('results');
       
       // Show appropriate notification
-      if (result.strategy_id.startsWith('trade_')) {
-        toast.success('Trade executed successfully!');
-      } else {
-        toast.success('Backtest completed successfully!');
-      }
+      // For now, all are backtests since we don't have live trading implemented yet
+      toast.success('Backtest completed successfully!');
     } else {
       // Handle errors
       toast.error(result.message || 'Operation failed. Please try again.');
@@ -82,6 +79,7 @@ function BacktestTrade() {
                     activeStrategies={activeStrategies}
                     setActiveStrategies={setActiveStrategies}
                     lastResults={lastResults}
+                    onBacktestComplete={handleStrategySubmit}
                   />
                 </div>
               </div>

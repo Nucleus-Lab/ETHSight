@@ -4,7 +4,7 @@ import StrategyList from './StrategyList';
 import { useChatContext } from '../../contexts/ChatContext';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
-const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null }) => {
+const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null, onBacktestComplete }) => {
   const { isChatOpen, setIsChatOpen } = useChatContext();
 
   console.log('BacktestTabContent - Active tab:', activeTab);
@@ -24,14 +24,16 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
         return (
           <div className="h-full overflow-y-auto">
             <BacktestResults 
-              strategyIds={activeStrategies} 
-              setActiveStrategies={setActiveStrategies}
               lastResults={lastResults}
             />
           </div>
         );
       case 'strategies':
-        return <StrategyList setActiveStrategies={setActiveStrategies} />;
+        return (
+          <StrategyList 
+            onBacktestComplete={onBacktestComplete}
+          />
+        );
       default:
         return null;
     }

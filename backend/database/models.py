@@ -12,6 +12,7 @@ class UserDB(Base):
 
     # Relationships
     canvases = relationship("CanvasDB", back_populates="user")
+    strategies = relationship("StrategyDB", back_populates="user")
 
     def to_dict(self):
         return {
@@ -70,4 +71,51 @@ class SignalDB(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    canvas = relationship("CanvasDB", back_populates="signals") 
+    canvas = relationship("CanvasDB", back_populates="signals")
+
+class StrategyDB(Base):
+    __tablename__ = "strategies"
+    
+    strategy_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"))
+    
+    # Filter signal
+    filter_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
+    
+    # Buy condition
+    buy_condition_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
+    buy_condition_operator = Column(String)
+    buy_condition_threshold = Column(String)  # Using String to handle various number formats
+    
+    # Sell condition  
+    sell_condition_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
+    sell_condition_operator = Column(String)
+    sell_condition_threshold = Column(String)  # Using String to handle various number formats
+    
+    # Position parameters
+    position_size = Column(String)  # Using String to handle various number formats
+    max_position_value = Column(String)  # Using String to handle various number formats
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("UserDB", back_populates="strategies")
+    filter_signal = relationship("SignalDB", foreign_keys=[filter_signal_id])
+    buy_signal = relationship("SignalDB", foreign_keys=[buy_condition_signal_id])
+    sell_signal = relationship("SignalDB", foreign_keys=[sell_condition_signal_id])
+
+    def to_dict(self):
+        return {
+            "strategy_id": self.strategy_id,
+            "user_id": self.user_id,
+            "filter_signal_id": self.filter_signal_id,
+            "buy_condition_signal_id": self.buy_condition_signal_id,
+            "buy_condition_operator": self.buy_condition_operator,
+            "buy_condition_threshold": self.buy_condition_threshold,
+            "sell_condition_signal_id": self.sell_condition_signal_id,
+            "sell_condition_operator": self.sell_condition_operator,
+            "sell_condition_threshold": self.sell_condition_threshold,
+            "position_size": self.position_size,
+            "max_position_value": self.max_position_value,
+            "created_at": self.created_at
+        } 

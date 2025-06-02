@@ -165,22 +165,23 @@ const BacktestResultCard = ({ result, resultId }) => {
       {result.signals && (
         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-lg font-semibold mb-3">Signal Information</h3>
+          {console.log('BacktestResultCard - result.signals:', result.signals)}
           <div className="space-y-3">
             {result.signals.filter && (
               <div>
-                <p className="font-medium">Filter Signal:</p>
+                <p className="font-medium">Filter Signal: {result.signals.filter.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.filter.description}</p>
               </div>
             )}
             {result.signals.buy && (
               <div>
-                <p className="font-medium">Buy Signal:</p>
+                <p className="font-medium">Buy Signal: {result.signals.buy.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.buy.description}</p>
               </div>
             )}
             {result.signals.sell && (
               <div>
-                <p className="font-medium">Sell Signal:</p>
+                <p className="font-medium">Sell Signal: {result.signals.sell.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.sell.description}</p>
               </div>
             )}

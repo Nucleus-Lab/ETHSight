@@ -124,7 +124,8 @@ const StrategyForm = ({ onSubmit }) => {
       timeRange: {
         start: startDate.toISOString(),
         end: endDate.toISOString()
-      }
+      },
+      wallet_address: user.wallet.address
     };
     
     console.log(`Strategy to ${isTradeMode ? 'trade' : 'backtest'}:`, strategy);

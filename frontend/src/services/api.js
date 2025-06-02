@@ -317,7 +317,8 @@ export const createSignal = async (signalData) => {
 // Run backtest with a strategy
 export const runBacktest = async (strategy) => {
   try {
-    console.log('Running backtest with strategy:', strategy);
+    console.log('Sending backtest request:', strategy);
+    
     const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/backtest`, {
       method: 'POST',
       headers: {
@@ -325,27 +326,37 @@ export const runBacktest = async (strategy) => {
       },
       body: JSON.stringify(strategy)
     });
-    
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to run backtest');
+      const errorData = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorData}`);
     }
-    
+
     const data = await response.json();
-    console.log('Backtest results:', data);
-
-    console.log('data.backtest_results', data.backtest_results)
-
-    // Transform the data to match the expected format for BacktestResults
+    console.log('Backtest response received:', data);
+    console.log('Backend results structure:', data.results);
+    
     return {
+      strategy_id: data.strategy_id,
       success: true,
-      strategy_id: `backtest_${Date.now()}`, // Generate a unique ID
-      fig: data.fig, // Use the figure data directly from backend
+      fig: data.fig,
       backtest_results: data.backtest_results,
       signals: {
-        filter: data.results.filterSignal,
-        buy: data.results.buySignal,
-        sell: data.results.sellSignal
+        filter: {
+          id: data.results?.filterSignal?.id,
+          name: data.results?.filterSignal?.name,
+          description: data.results?.filterSignal?.description
+        },
+        buy: {
+          id: data.results?.buySignal?.id,
+          name: data.results?.buySignal?.name,
+          description: data.results?.buySignal?.description
+        },
+        sell: {
+          id: data.results?.sellSignal?.id,
+          name: data.results?.sellSignal?.name,
+          description: data.results?.sellSignal?.description
+        }
       }
     };
   } catch (error) {
@@ -376,6 +387,32 @@ export const executeTrade = async (strategy) => {
     return data;
   } catch (error) {
     console.error('Error executing trade:', error);
+    throw error;
+  }
+};
+
+export const getUserStrategies = async (walletAddress) => {
+  try {
+    console.log('Fetching strategies for wallet:', walletAddress);
+    
+    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/user/${encodeURIComponent(walletAddress)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('User strategies response:', data);
+    
+    return data.strategies || [];
+  } catch (error) {
+    console.error('Error fetching user strategies:', error);
     throw error;
   }
 };
