@@ -56,7 +56,7 @@ class SignalIdentifier(dspy.Signature):
     You are a signal identifier in python.
     You are given a user's prompt and sample data of a CSV file.
     You need to identify the signal in the data.
-    A signal is a piece of indicator that might be useful for user to trade.
+    A signal is a piece of indicator that might be useful for user to trade, it should be general and not tied to any specific token.
     """
     prompt = dspy.InputField(prefix="User's prompt:")
     sample_data = dspy.InputField(prefix="The sample data of the CSV file:")
