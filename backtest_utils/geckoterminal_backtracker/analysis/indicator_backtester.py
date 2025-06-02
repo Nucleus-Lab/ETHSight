@@ -200,164 +200,68 @@ def use_indicator_code(df, indicator_code, indicator_name):
 
 def backtest_indicators(df, buy_indicator, sell_indicator=None, buy_column=None, sell_column=None, indicators_dir='indicators', use_existing_indicators=False):
     """
-    回测指标组合
+    Backtest with prepared signals
     
-    参数:
-        df: 原始数据框
-        buy_indicator: 买入指标名称或文件名
-        sell_indicator: 卖出指标名称或文件名，如果不提供则使用买入指标
-        buy_column: 买入信号列名，如果不提供则自动识别
-        sell_column: 卖出信号列名，如果不提供则自动识别
-        indicators_dir: 指标目录
-        use_existing_indicators: 是否使用已应用到DataFrame的指标，跳过文件查找
+    Args:
+        df: DataFrame with prepared signals
+        buy_indicator: Buy indicator name for display
+        sell_indicator: Sell indicator name for display
+        buy_column: Buy signal column name (defaults to 'buy_signal')
+        sell_column: Sell signal column name (defaults to 'sell_signal')
+        indicators_dir: Not used
+        use_existing_indicators: Not used
         
-    返回:
-        (result_df, buy_indicator_info, sell_indicator_info, stats): 结果数据框、买入指标信息、卖出指标信息、统计信息
+    Returns:
+        (result_df, buy_indicator_info, sell_indicator_info, stats, buy_signal_columns, sell_signal_columns)
     """
-    if use_existing_indicators:
-        # 使用已经应用到DataFrame的指标，跳过文件查找
-        print(f"使用已应用的指标，跳过文件查找")
-        result_df = df.copy()
-        
-        # 创建买入指标信息
-        buy_indicator_info = {
-            'name': buy_indicator,
-            'path': 'database',
+    print(f"Running backtest with prepared signals...")
+    result_df = df.copy()
+    
+    # Use default column names if not specified
+    buy_signal_columns = [buy_column] if buy_column else ['buy_signal']
+    sell_signal_columns = [sell_column] if sell_column else ['sell_signal']
+    
+    # Create indicator info
+    buy_indicator_info = {
+        'name': buy_indicator,
+        'path': 'database',
+        'code': 'stored_in_database',
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'new_columns': buy_signal_columns
+    }
+    
+    sell_indicator_info = None
+    if sell_indicator:
+        sell_indicator_info = {
+            'name': sell_indicator,
+            'path': 'database', 
             'code': 'stored_in_database',
             'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'new_columns': [col for col in result_df.columns if 'buy' in col.lower() or 'signal' in col.lower()]
+            'new_columns': sell_signal_columns
         }
-        
-        # 创建卖出指标信息
-        sell_indicator_info = None
-        if sell_indicator:
-            sell_indicator_info = {
-                'name': sell_indicator,
-                'path': 'database', 
-                'code': 'stored_in_database',
-                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'new_columns': [col for col in result_df.columns if 'sell' in col.lower()]
-            }
-    else:
-        # 原有的文件查找逻辑
-        # 应用买入指标
-        result_df, buy_indicator_info = use_indicator(df, buy_indicator, indicators_dir)
-        
-        # 保存买入指标的买入信号
-        buy_signal_backup = None
-        if 'buy_signal' in result_df.columns:
-            buy_signal_backup = result_df['buy_signal'].copy()
-            print(f"备份买入信号，共有 {buy_signal_backup.sum()} 个买入信号")
-        
-        # 如果指定了卖出指标，则应用卖出指标
-        sell_indicator_info = None
-        if sell_indicator:
-            # 保存买入指标的列
-            buy_columns = buy_indicator_info['new_columns']
-            
-            # 应用卖出指标
-            result_df, sell_indicator_info = use_indicator(df, sell_indicator, indicators_dir)
-            
-            # 恢复买入信号
-            if buy_signal_backup is not None:
-                # 如果卖出指标也创建了buy_signal列，合并两个信号
-                if 'buy_signal' in result_df.columns:
-                    # 使用逻辑或合并买入信号
-                    result_df['buy_signal'] = (result_df['buy_signal'] | buy_signal_backup).astype(int)
-                    print(f"合并后的买入信号数量: {result_df['buy_signal'].sum()}")
-                else:
-                    result_df['buy_signal'] = buy_signal_backup
-            
-            # 将买入指标的其他列添加回结果中
-            for col in buy_columns:
-                if col not in result_df.columns and col != 'buy_signal':
-                    # 从原始结果中获取买入指标列
-                    tmp_df, _ = use_indicator(df, buy_indicator, indicators_dir)
-                    result_df[col] = tmp_df[col]
     
-    # 提取信号列
-    if buy_column and buy_column in result_df.columns:
-        # 用户指定了买入信号列
-        buy_signal_columns = [buy_column]
-    else:
-        # 自动识别买入信号列
-        buy_signal_columns = [col for col in result_df.columns if 'buy' in col.lower() or ('signal' in col.lower() and result_df[col].dtype in ['int64', 'int32', 'bool'])]
-    
-    if sell_column and sell_column in result_df.columns:
-        # 用户指定了卖出信号列
-        sell_signal_columns = [sell_column]
-    else:
-        # 自动识别卖出信号列
-        sell_signal_columns = [col for col in result_df.columns if 'sell' in col.lower()]
-    
-    # 打印最终的买入和卖出信号数量
-    for col in buy_signal_columns:
-        if col in result_df.columns:
-            print(f"最终 {col} 信号数量: {result_df[col].sum()}")
-    
-    for col in sell_signal_columns:
-        if col in result_df.columns:
-            print(f"最终 {col} 信号数量: {result_df[col].sum()}")
-    
-    # 计算交易统计
+    # Calculate trading stats
     stats = calculate_trading_stats(result_df, buy_signal_columns, sell_signal_columns)
-    
-    print(f"[DEBUG] 交易统计计算完成:")
-    print(f"[DEBUG] - 有信号: {stats['has_signals']}")
-    print(f"[DEBUG] - 交易次数: {stats['total_trades']}")
-    print(f"[DEBUG] - 胜率: {stats['win_rate']:.2f}%")
-    print(f"[DEBUG] - DataFrame包含cumulative_pnl: {'cumulative_pnl' in result_df.columns}")
-    print(f"[DEBUG] - DataFrame包含pnl_percentage: {'pnl_percentage' in result_df.columns}")
     
     return result_df, buy_indicator_info, sell_indicator_info, stats, buy_signal_columns, sell_signal_columns
 
 def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
     """
-    计算交易统计
+    Calculate trading statistics
     
-    参数:
-        df: 数据框
-        buy_signal_columns: 买入信号列
-        sell_signal_columns: 卖出信号列
+    Args:
+        df: DataFrame with signals
+        buy_signal_columns: Buy signal column names
+        sell_signal_columns: Sell signal column names
         
-    返回:
-        stats: 统计信息字典
+    Returns:
+        stats: Dictionary with trading statistics (JSON serializable)
     """
-    print(f"[DEBUG] 开始计算交易统计...")
-    print(f"[DEBUG] 买入信号列: {buy_signal_columns}")
-    print(f"[DEBUG] 卖出信号列: {sell_signal_columns}")
     
-    # 🎯 计算MACD指标
-    print(f"[DEBUG] 开始计算MACD指标...")
-    
-    if 'close' in df.columns and len(df) >= 26:  # 确保有足够的数据计算MACD
-        # 计算EMA12和EMA26
-        ema12 = df['close'].ewm(span=12, adjust=False).mean()
-        ema26 = df['close'].ewm(span=26, adjust=False).mean()
         
-        print("ema12", ema12)
-        print("ema26", ema26)
-        
-        # 计算MACD线 (DIF)
-        df['macd'] = ema12 - ema26
-        
-        # 计算信号线 (DEA) - MACD的9日EMA
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-        
-        print("macd", df['macd'])
-        print("macd_signal", df['macd_signal'])
-        
-        # 计算MACD柱状图 (MACD Histogram)
-        df['macd_histogram'] = df['macd'] - df['macd_signal']
-        
-        print("macd_histogram", df['macd_histogram'])
-        
-        print(f"✅ MACD指标计算完成:")
-        print(f"   - MACD范围: {df['macd'].min():.6f} 到 {df['macd'].max():.6f}")
-        print(f"   - Signal范围: {df['macd_signal'].min():.6f} 到 {df['macd_signal'].max():.6f}")
-        print(f"   - Histogram范围: {df['macd_histogram'].min():.6f} 到 {df['macd_histogram'].max():.6f}")
-    else:
-        print(f"⚠️ 数据不足，无法计算MACD指标 (需要至少26个数据点，当前: {len(df)})")
+    print(f"[DEBUG] Starting trading stats calculation...")
+    print(f"[DEBUG] Buy signal columns: {buy_signal_columns}")
+    print(f"[DEBUG] Sell signal columns: {sell_signal_columns}")
     
     stats = {
         'has_signals': False,
@@ -369,75 +273,55 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
         'trades': []
     }
     
-    # 初始化累计PnL列
-    df['cumulative_pnl'] = 1000.0  # 初始投资1000
+    # Initialize cumulative PnL columns
+    df['cumulative_pnl'] = 1000.0  # Initial investment
     df['pnl_percentage'] = 0.0
     
     if not buy_signal_columns or (not sell_signal_columns and len(buy_signal_columns) == 0):
-        print(f"[DEBUG] 没有有效的信号列，返回空统计")
+        print(f"[DEBUG] No valid signal columns, returning empty stats")
         return stats
     
-    # 如果没有明确的卖出信号，使用买入信号的反转作为卖出信号
-    if not sell_signal_columns and len(buy_signal_columns) > 0:
-        buy_signal_col = buy_signal_columns[0]
-        print(f"[DEBUG] 使用单一买入信号列生成卖出信号: {buy_signal_col}")
-        
-        # 根据信号类型处理
-        if df[buy_signal_col].dtype == 'bool':
-            buy_signals = df[df[buy_signal_col] == True].copy()
-            # 假设买入后下一个信号为卖出
-            sell_signals = pd.DataFrame()
-            in_position = False
-            
-            for idx, row in df.iterrows():
-                if row[buy_signal_col] == True and not in_position:
-                    in_position = True
-                elif in_position:  # 已经持仓，下一个信号作为卖出
-                    sell_signals = pd.concat([sell_signals, pd.DataFrame([row])])
-                    in_position = False
-        else:  # int或其他类型
-            buy_signals = df[df[buy_signal_col] == 1].copy()
-            sell_signals = df[df[buy_signal_col] == -1].copy() if -1 in df[buy_signal_col].values else pd.DataFrame()
-            
-            # 如果没有-1信号，则使用类似上面的逻辑
-            if sell_signals.empty:
-                sell_signals = pd.DataFrame()
-                in_position = False
-                
-                for idx, row in df.iterrows():
-                    if row[buy_signal_col] == 1 and not in_position:
-                        in_position = True
-                    elif in_position:  # 已经持仓，下一个非买入信号作为卖出
-                        if row[buy_signal_col] != 1:
-                            sell_signals = pd.concat([sell_signals, pd.DataFrame([row])])
-                            in_position = False
+    # Use first buy and sell signal columns
+    buy_signal_col = buy_signal_columns[0]
+    sell_signal_col = sell_signal_columns[0] if sell_signal_columns else None
+    
+    print(f"[DEBUG] Using signal columns - Buy: {buy_signal_col}, Sell: {sell_signal_col}")
+    
+    # Get buy signals
+    if df[buy_signal_col].dtype == 'bool':
+        buy_signals = df[df[buy_signal_col] == True].copy()
     else:
-        # 使用第一个买入和卖出信号列
-        buy_signal_col = buy_signal_columns[0]
-        sell_signal_col = sell_signal_columns[0]
-        print(f"[DEBUG] 使用独立的买入和卖出信号列: {buy_signal_col}, {sell_signal_col}")
-        
-        # 处理不同类型的信号
-        if df[buy_signal_col].dtype == 'bool':
-            buy_signals = df[df[buy_signal_col] == True].copy()
-        else:
-            buy_signals = df[df[buy_signal_col] == 1].copy()
-            
+        buy_signals = df[df[buy_signal_col] == 1].copy()
+    
+    # Get sell signals
+    if sell_signal_col:
         if df[sell_signal_col].dtype == 'bool':
             sell_signals = df[df[sell_signal_col] == True].copy()
         else:
             sell_signals = df[df[sell_signal_col] == 1].copy()
+    else:
+        # If no sell signal column, create sell signals after each buy signal
+        sell_signals = pd.DataFrame()
+        in_position = False
+        
+        for idx, row in df.iterrows():
+            if row[buy_signal_col] == 1 and not in_position:
+                in_position = True
+            elif in_position:  # Already in position, next non-buy signal is sell
+                if row[buy_signal_col] != 1:
+                    sell_signals = pd.concat([sell_signals, pd.DataFrame([row])])
+                    in_position = False
     
-    print(f"[DEBUG] 原始买入信号数量: {len(buy_signals)}")
-    print(f"[DEBUG] 原始卖出信号数量: {len(sell_signals)}")
+    print(f"[DEBUG] Raw buy signals: {len(buy_signals)}")
+    print(f"[DEBUG] Raw sell signals: {len(sell_signals)}")
     
-    # 实现现货交易逻辑：只有买入后才能卖出
+    # Implement spot trading logic: can only sell after buying
     valid_buy_signals = []
     valid_sell_signals = []
     in_position = False
     entry_price = 0
     
-    # 按时间排序所有信号
+    # Sort all signals by time
     all_signals = pd.DataFrame()
     if not buy_signals.empty:
         buy_signals['signal_type'] = 'buy'
@@ -446,120 +330,144 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
         sell_signals['signal_type'] = 'sell'
         all_signals = pd.concat([all_signals, sell_signals])
     
-    # 按时间排序
     if not all_signals.empty:
         all_signals = all_signals.sort_values('datetime')
-        print(f"[DEBUG] 总信号数量: {len(all_signals)}")
+        print(f"[DEBUG] Total signals: {len(all_signals)}")
         
-        # 遍历所有信号，模拟交易
+        # Process signals in chronological order
         for idx, row in all_signals.iterrows():
             if row['signal_type'] == 'buy' and not in_position:
-                # 买入信号，且当前没有持仓
                 valid_buy_signals.append(row)
                 in_position = True
                 entry_price = row['close']
-                print(f"[DEBUG] 买入: {row['datetime']}, 价格: {row['close']}")
+                print(f"[DEBUG] Buy: {row['datetime']}, Price: {row['close']}")
             elif row['signal_type'] == 'sell' and in_position:
-                # 卖出信号，且当前有持仓
                 valid_sell_signals.append(row)
                 in_position = False
                 profit = (row['close'] - entry_price) / entry_price * 100
-                print(f"[DEBUG] 卖出: {row['datetime']}, 价格: {row['close']}, 收益: {profit:.2f}%")
+                print(f"[DEBUG] Sell: {row['datetime']}, Price: {row['close']}, Return: {profit:.2f}%")
     
-    print(f"[DEBUG] 有效买入信号数量: {len(valid_buy_signals)}")
-    print(f"[DEBUG] 有效卖出信号数量: {len(valid_sell_signals)}")
+    print(f"[DEBUG] Valid buy signals: {len(valid_buy_signals)}")
+    print(f"[DEBUG] Valid sell signals: {len(valid_sell_signals)}")
     
-    # 计算交易统计和累计PnL
+    # Calculate trading statistics
     if valid_buy_signals and valid_sell_signals:
         stats['has_signals'] = True
-        
-        # 计算盈利率
         stats['total_trades'] = len(valid_sell_signals)
         stats['profitable_trades'] = sum([s['close'] > b['close'] for s, b in zip(valid_sell_signals, valid_buy_signals)])
         stats['win_rate'] = stats['profitable_trades'] / stats['total_trades'] * 100 if stats['total_trades'] > 0 else 0
         
-        # 计算总收益
+        # Calculate returns and build trade history
         returns = []
         for i in range(min(len(valid_buy_signals), len(valid_sell_signals))):
-            buy_time = valid_buy_signals[i]['datetime']
-            sell_time = valid_sell_signals[i]['datetime']
             buy_price = valid_buy_signals[i]['close']
             sell_price = valid_sell_signals[i]['close']
             profit = (sell_price - buy_price) / buy_price * 100
             
             returns.append(profit)
             stats['trades'].append({
-                'buy_time': buy_time,
-                'sell_time': sell_time,
-                'buy_price': buy_price,
-                'sell_price': sell_price,
-                'profit': profit
+                'buy_time': valid_buy_signals[i]['datetime'].isoformat(),
+                'sell_time': valid_sell_signals[i]['datetime'].isoformat(),
+                'buy_price': float(buy_price),
+                'sell_price': float(sell_price),
+                'profit': float(profit)
             })
         
-        stats['total_return'] = sum(returns)
-        stats['avg_return'] = stats['total_return'] / len(returns) if returns else 0
+        stats['total_return'] = float(sum(returns))
+        stats['avg_return'] = float(stats['total_return'] / len(returns)) if returns else 0
         
-        # 🎯 计算累计PnL曲线
-        print(f"[DEBUG] 开始计算累计PnL曲线...")
+        # Calculate cumulative PnL curve
+        print(f"[DEBUG] Calculating cumulative PnL curve...")
         
-        # 创建交易信号时间序列
+        # Create trade signal timeline
         trade_signals = []
         for buy_sig in valid_buy_signals:
-            trade_signals.append((buy_sig['datetime'], 'buy', buy_sig['close']))
+            trade_signals.append((buy_sig['datetime'], 'buy', float(buy_sig['close'])))
         for sell_sig in valid_sell_signals:
-            trade_signals.append((sell_sig['datetime'], 'sell', sell_sig['close']))
+            trade_signals.append((sell_sig['datetime'], 'sell', float(sell_sig['close'])))
         
-        # 按时间排序
+        # Sort by time
         trade_signals.sort(key=lambda x: x[0])
-        print(f"[DEBUG] 交易信号时间序列长度: {len(trade_signals)}")
         
-        # 模拟交易，计算累计PnL
-        initial_investment = 1000  # 初始投资
+        # Simulate trading for PnL
+        initial_investment = 1000.0
         current_value = initial_investment
         in_position = False
         entry_price = 0
-        pnl_data = []  # 存储每次交易完成后的PnL数据
+        pnl_data = []
         
         for time, signal_type, price in trade_signals:
             if signal_type == 'buy' and not in_position:
                 entry_price = price
                 in_position = True
-                print(f"[DEBUG] PnL计算 - 买入: {time}, 价格: {price}")
             elif signal_type == 'sell' and in_position:
-                # 计算这笔交易的收益
                 profit_pct = (price - entry_price) / entry_price
                 current_value *= (1 + profit_pct)
-                pnl_data.append((time, current_value))
+                pnl_data.append((time.isoformat(), float(current_value)))
                 in_position = False
-                print(f"[DEBUG] PnL计算 - 卖出: {time}, 价格: {price}, 账户价值: {current_value:.2f}")
         
-        print(f"[DEBUG] PnL数据点数量: {len(pnl_data)}")
-        
-        # 为DataFrame的每个时间点分配PnL值
+        # Update DataFrame with PnL values
         if pnl_data:
             pnl_df = pd.DataFrame(pnl_data, columns=['time', 'value'])
             last_pnl = initial_investment
             
             for i, row in df.iterrows():
                 current_time = row['datetime']
-                # 找到当前时间之前的最后一个PnL值
-                prev_pnl = pnl_df[pnl_df['time'] <= current_time]
+                prev_pnl = pnl_df[pd.to_datetime(pnl_df['time']) <= current_time]
                 
                 if not prev_pnl.empty:
                     last_pnl = prev_pnl.iloc[-1]['value']
                 
-                df.at[i, 'cumulative_pnl'] = last_pnl
-                df.at[i, 'pnl_percentage'] = (last_pnl - initial_investment) / initial_investment * 100
+                df.at[i, 'cumulative_pnl'] = float(last_pnl)
+                df.at[i, 'pnl_percentage'] = float((last_pnl - initial_investment) / initial_investment * 100)
             
-            print(f"[DEBUG] 最终账户价值: {last_pnl:.2f}")
-            print(f"[DEBUG] 最终收益率: {(last_pnl - initial_investment) / initial_investment * 100:.2f}%")
-            print(f"[DEBUG] 累计PnL列已添加到DataFrame")
-        else:
-            print(f"[DEBUG] 没有PnL数据点，保持初始值")
-    else:
-        print(f"[DEBUG] 没有有效的交易对，无法计算PnL")
+            print(f"[DEBUG] Final account value: {last_pnl:.2f}")
+            print(f"[DEBUG] Final return: {(last_pnl - initial_investment) / initial_investment * 100:.2f}%")
+    
+    # Ensure all numeric values are basic Python types (not numpy or pandas types)
+    stats = {k: float(v) if isinstance(v, (np.floating, np.integer)) else v 
+            for k, v in stats.items()}
     
     return stats
+
+def calculate_macd(df, fast_period=12, slow_period=26, signal_period=9):
+    """
+    Calculate MACD指标
+    
+    Args:
+        df: DataFrame with OHLC data
+        fast_period: Fast EMA period (default 12)
+        slow_period: Slow EMA period (default 26)
+        signal_period: Signal EMA period (default 9)
+        
+    Returns:
+        df: DataFrame with MACD columns
+    """
+    # 🎯 计算MACD指标
+    print(f"[DEBUG] 开始计算MACD指标...")
+    
+    if 'close' in df.columns and len(df) >= 26:  # 确保有足够的数据计算MACD
+        # 计算EMA12和EMA26
+        ema12 = df['close'].ewm(span=12, adjust=False).mean()
+        ema26 = df['close'].ewm(span=26, adjust=False).mean()
+         
+        # 计算MACD线 (DIF)
+        df['macd'] = ema12 - ema26
+        
+        # 计算信号线 (DEA) - MACD的9日EMA
+        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+        
+        # 计算MACD柱状图 (MACD Histogram)
+        df['macd_histogram'] = df['macd'] - df['macd_signal']
+        
+        print(f"✅ MACD指标计算完成:")
+        print(f"   - MACD范围: {df['macd'].min():.6f} 到 {df['macd'].max():.6f}")
+        print(f"   - Signal范围: {df['macd_signal'].min():.6f} 到 {df['macd_signal'].max():.6f}")
+        print(f"   - Histogram范围: {df['macd_histogram'].min():.6f} 到 {df['macd_histogram'].max():.6f}")
+    else:
+        print(f"⚠️ 数据不足，无法计算MACD指标 (需要至少26个数据点，当前: {len(df)})")
+    
+    return df
 
 def plot_backtest_results(df, buy_indicator_info, sell_indicator_info, buy_signal_columns, sell_signal_columns, 
                          title=None, save_path=None, save_json=None, network=None, pool=None,
@@ -579,6 +487,9 @@ def plot_backtest_results(df, buy_indicator_info, sell_indicator_info, buy_signa
         network: 网络名称
         pool: 池子地址
     """
+    # Prepare df with MACD for plotting
+    df = calculate_macd(df)
+    
     analyzer = OHLCAnalyzer(df)
     
     # 准备所有指标列用于绘图

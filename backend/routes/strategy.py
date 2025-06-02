@@ -6,12 +6,21 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 import traceback
 from backend.database import get_db
-from backend.database.signal import get_signal_by_id, update_signal_code, get_signal_code, signal_has_code
+from backend.database.signal import (
+    get_signal_by_id, 
+    update_signal_code, 
+    get_signal_code, 
+    signal_has_code,
+    update_signal_calculation_code,
+    get_signal_calculation_code,
+    signal_has_calculation_code
+)
 from backend.database.user import get_user, create_user
 from backend.database.strategy import create_strategy
 from backend.database.backtest_history import create_backtest_history
 import sys
 import os
+import pandas as pd
 
 # Add the backtest_utils directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -20,7 +29,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from backtest_utils.strategy_interface import (
     generate_indicator_from_prompt,
     run_backtest_with_indicators,
-    generate_indicator_code_from_prompt
+    generate_indicator_code_from_prompt,
+    generate_signal_calculation_code_from_prompt,
+    apply_signal_calculation_code,
+    apply_condition_to_signal,
+    run_backtest_with_prepared_signals,
+    search_and_get_pool_address,
+    fetch_ohlc_data
 )
 
 router = APIRouter()
@@ -103,50 +118,80 @@ def filter_token_info(filter_signal_name: str, filter_signal_description: str):
                 break
     return token_name, token_symbol, token_contract_address
 
-def build_prompt_for_generate_indicator(is_buy_signal: bool, signal_name: str, signal_operator: str, signal_threshold: float, signal_description: str):
-    """Build prompt for generate indicator"""
-    prompt = f"""
-        Generate a {"buy" if is_buy_signal else "sell"} indicator for the signal where the condition is {signal_name} {signal_operator} {signal_threshold}.
-        Description of the signal: {signal_description}
-        """
-    return prompt
-
-def get_or_generate_signal_code(db: Session, signal_id: int, is_buy_signal: bool, operator: str, threshold: float) -> str:
-    """Get signal code from database or generate if not exists"""
-    # Check if signal has code in database
-    if signal_has_code(db, signal_id):
-        print(f"Using cached code for signal {signal_id}")
-        return get_signal_code(db, signal_id)
+def get_or_generate_signal_calculation_code(db: Session, signal_id: int) -> str:
+    """Get signal calculation code from database or generate if not exists (decoupled approach)"""
+    # Check if signal has calculation code in database
+    if signal_has_calculation_code(db, signal_id):
+        print(f"✅ Using cached signal calculation code for signal {signal_id}")
+        return get_signal_calculation_code(db, signal_id)
     
-    # Generate new code if not in database
+    # Generate new calculation code if not in database
     signal = get_signal_by_id(db, signal_id)
     if not signal:
         raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found")
     
-    print(f"Generating new code for signal {signal_id}: {signal.signal_name}")
-    
-    # Build prompt for the signal
-    prompt = build_prompt_for_generate_indicator(
-        is_buy_signal=is_buy_signal,
-        signal_name=signal.signal_name,
-        signal_operator=operator,
-        signal_threshold=threshold,
-        signal_description=signal.signal_description
-    )
+    print(f"🔄 Generating new signal calculation code for signal {signal_id}: {signal.signal_name}")
     
     try:
-        # Generate the indicator code
-        code = generate_indicator_code_from_prompt(prompt)
+        # Generate the signal calculation code (decoupled from buy/sell logic)
+        code = generate_signal_calculation_code_from_prompt(
+            signal_description=signal.signal_description,
+            signal_name=signal.signal_name
+        )
         
-        # Store the code in database
-        update_signal_code(db, signal_id, code)
+        # Store the calculation code in database
+        update_signal_calculation_code(db, signal_id, code)
         
-        print(f"Generated and cached code for signal {signal_id}")
+        print("signal code", code)
+        
+        print(f"✅ Generated and cached signal calculation code for signal {signal_id}")
         return code
         
     except Exception as e:
-        print(f"Error generating code for signal {signal_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate indicator code: {str(e)}")
+        print(f"❌ Error generating signal calculation code for signal {signal_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate signal calculation code: {str(e)}")
+
+
+def prepare_signal_with_condition(df, signal_id: int, operator: str, threshold: float, condition_type: str, db: Session):
+    """
+    Prepare a signal by calculating signal values and applying conditions (decoupled approach)
+    
+    Args:
+        df: DataFrame with OHLC data
+        signal_id: Signal ID from database
+        operator: Comparison operator
+        threshold: Threshold value
+        condition_type: 'buy' or 'sell'
+        db: Database session
+        
+    Returns:
+        tuple: (df_with_signals, signal_column_name)
+    """
+    signal = get_signal_by_id(db, signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found")
+    
+    signal_name = signal.signal_name
+    
+    print(f"🔄 Preparing {condition_type} signal: {signal_name} {operator} {threshold}")
+    
+    # Make a copy of the DataFrame to preserve existing columns
+    df_copy = df.copy()
+    
+    # Step 1: Get or generate signal calculation code (AI will check for existing columns)
+    signal_calc_code = get_or_generate_signal_calculation_code(db, signal_id)
+    
+    # Step 2: Apply signal calculation code (AI will use existing column if found, or calculate new one)
+    df_with_signal, signal_column = apply_signal_calculation_code(df_copy, signal_calc_code, signal_name)
+    print(f"   🎯 Signal column ready: {signal_column}")
+    
+    # Step 3: Apply condition to generate buy/sell signals
+    df_with_signal = apply_condition_to_signal(df_with_signal, signal_column, operator, threshold, condition_type)
+    
+    # Step 4: Verify all columns were preserved
+    print(f"   📋 DataFrame columns after signal preparation: {list(df_with_signal.columns)}")
+    
+    return df_with_signal, signal_column
 
 @router.post("/strategy/backtest")
 async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
@@ -215,33 +260,123 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
         
         print(f"Token: {token_name} ({token_symbol})")
         
-        # Generate AI indicators
-        print("\nGenerating buy indicator...")
-        buy_indicator_name = buy_signal.signal_name.replace(" ", "_")
-        buy_indicator_code = get_or_generate_signal_code(db, strategy.buyCondition.signal_id, True, strategy.buyCondition.operator, strategy.buyCondition.threshold)
-        print("buy_indicator_code generated for:", buy_indicator_name)
+        # Step 1: Fetch OHLC data first to create DataFrame
+        print("\n" + "="*60)
+        print("📊 FETCHING MARKET DATA")
+        print("="*60)
+        try:
+            # Search for pool address
+            pool_address = search_and_get_pool_address("eth", token_symbol)
+            print(f"✅ Found pool address: {pool_address}")
+            
+            # Fetch OHLC data
+            data_file_path = fetch_ohlc_data(
+                network="eth",
+                pool_address=pool_address,
+                timeframe="1d",
+                time_start=strategy.timeRange['start'],
+                time_end=strategy.timeRange['end']
+            )
+            
+            # Read the CSV file to get the DataFrame
+            print(f"📖 Reading data from: {data_file_path}")
+            df = pd.read_csv(data_file_path)
+            
+            print(f"📋 DataFrame columns: {list(df.columns)}")
+            
+            # Ensure datetime column exists and is properly formatted
+            if 'datetime' not in df.columns:
+                if 'timestamp' in df.columns:
+                    df['datetime'] = pd.to_datetime(df['timestamp'])
+                else:
+                    # Create datetime from index if needed
+                    df['datetime'] = pd.to_datetime(df.index)
+            else:
+                df['datetime'] = pd.to_datetime(df['datetime'])
+                
+            # Sort by datetime and check data
+            df = df.sort_values('datetime')
+            
+            if df.empty:
+                raise Exception("No data available for the specified time range")
+                
+            print(f"✅ Loaded {len(df)} data points")
+            print(f"📊 DataFrame shape: {df.shape}")
+            print(f"📅 Date range: {df['datetime'].min()} to {df['datetime'].max()}")
+            
+        except Exception as e:
+            print(f"❌ Error fetching OHLC data: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
         
-        print("\nGenerating sell indicator...")
-        sell_indicator_name = sell_signal.signal_name.replace(" ", "_")
-        sell_indicator_code = get_or_generate_signal_code(db, strategy.sellCondition.signal_id, False, strategy.sellCondition.operator, strategy.sellCondition.threshold)
-        print("sell_indicator_code generated for:", sell_indicator_name)
+        # Step 2: Prepare DataFrame with signal calculations and conditions (DECOUPLED APPROACH)
+        print("\n" + "="*60)
+        print("🧮 PREPARING TRADING SIGNALS (DECOUPLED)")
+        print("="*60)
+        
+        print("\n📈 Preparing buy signals...")
+        df, buy_signal_column = prepare_signal_with_condition(
+            df, 
+            strategy.buyCondition.signal_id, 
+            strategy.buyCondition.operator, 
+            strategy.buyCondition.threshold, 
+            'buy', 
+            db
+        )
+        
+        print("\n📉 Preparing sell signals...")
+        df, sell_signal_column = prepare_signal_with_condition(
+            df, 
+            strategy.sellCondition.signal_id, 
+            strategy.sellCondition.operator, 
+            strategy.sellCondition.threshold, 
+            'sell', 
+            db
+        )
+        
+        print(f"\n✅ Signal preparation completed:")
+        print(f"   📈 Buy signal column: {buy_signal_column}")
+        print(f"   📉 Sell signal column: {sell_signal_column}")
+        
+        # Validate signals were generated
+        buy_signals = df['buy_signal'].sum()
+        sell_signals = df['sell_signal'].sum()
+        print(f"\n📊 Signal Statistics:")
+        print(f"   📈 Total buy signals: {buy_signals}")
+        print(f"   📉 Total sell signals: {sell_signals}")
+        print(f"   📋 Data points: {len(df)}")
+        
+        if buy_signals == 0 and sell_signals == 0:
+            print("\n❌ No trading signals generated!")
+            return {
+                "success": False,
+                "error": "No trading signals were generated. Check your strategy conditions.",
+                "buy_signals": 0,
+                "sell_signals": 0,
+                "data_points": len(df),
+                "strategy_details": {
+                    "buy_condition": f"{buy_signal.signal_name} {strategy.buyCondition.operator} {strategy.buyCondition.threshold}",
+                    "sell_condition": f"{sell_signal.signal_name} {strategy.sellCondition.operator} {strategy.sellCondition.threshold}"
+                }
+            }
         
         # Set network and timeframe parameters
         network = "eth"  # You can make this configurable
         timeframe = "1d"  # You can make this configurable based on strategy
         
-        # Run backtest with the generated indicators
-        print("\nRunning backtest...")
-        backtest_result = run_backtest_with_indicators(
+        # Step 3: Run backtest with the prepared signals (DECOUPLED APPROACH)
+        print("\n" + "="*60) 
+        print("🚀 RUNNING BACKTEST WITH DECOUPLED SIGNALS")
+        print("="*60)
+        
+        backtest_result = run_backtest_with_prepared_signals(
+            df=df,
             network=network,
             token_symbol=token_symbol,
             timeframe=timeframe,
             time_start=strategy.timeRange['start'],
             time_end=strategy.timeRange['end'],
-            buy_indicator_code=buy_indicator_code,
-            sell_indicator_code=sell_indicator_code,
-            buy_indicator_name=buy_indicator_name,
-            sell_indicator_name=sell_indicator_name
+            buy_signal_name=buy_signal.signal_name,
+            sell_signal_name=sell_signal.signal_name
         )
         
     
@@ -260,38 +395,50 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
                 time_end=strategy.timeRange['end'],
                 trading_stats=backtest_result['trading_stats'],
                 data_points=backtest_result.get('data_points'),
-                network=network,
+                network="eth",
                 token_symbol=token_symbol,
-                timeframe=timeframe
+                timeframe="1d"
             )
-            print(f"Saved backtest history with ID: {backtest_history.backtest_id}")
+            print(f"✅ Saved backtest history with ID: {backtest_history.backtest_id}")
         except Exception as e:
-            print(f"Warning: Failed to save backtest history: {e}")
+            print(f"⚠️  Warning: Failed to save backtest history: {e}")
             # Don't fail the entire request if history saving fails
         
-        # Return comprehensive result
+        # Return comprehensive result with decoupled signal information
         return {
             "status": "success",
             "strategy_id": saved_strategy.strategy_id,
             "strategy": complete_strategy,
-            "fig": backtest_result['plotly_figure'],
+            "fig": backtest_result.get('plotly_figure'),
             "backtest_results": {
-                "trading_stats": backtest_result['trading_stats'],
-                "plotly_figure": backtest_result['plotly_figure'],
-                "data_points": backtest_result['data_points'],
-                "time_range": backtest_result['time_range']
+                "trading_stats": backtest_result.get('trading_stats', {}),
+                "plotly_figure": backtest_result.get('plotly_figure'),
+                "data_points": backtest_result.get('data_points'),
+                "time_range": backtest_result.get('time_range')
             },
-            "indicators": {
-                "buy_indicator": {
-                    "name": buy_indicator_name,
-                    "code": buy_indicator_code,
+            "signals": {
+                "buy_signal": {
+                    "name": buy_signal.signal_name,
+                    "column": buy_signal_column,
+                    "operator": strategy.buyCondition.operator,
+                    "threshold": strategy.buyCondition.threshold,
+                    "description": buy_signal.signal_description,
                     "info": backtest_result.get('buy_indicator_info')
                 },
-                "sell_indicator": {
-                    "name": sell_indicator_name,
-                    "code": sell_indicator_code,
+                "sell_signal": {
+                    "name": sell_signal.signal_name,
+                    "column": sell_signal_column,
+                    "operator": strategy.sellCondition.operator,
+                    "threshold": strategy.sellCondition.threshold,
+                    "description": sell_signal.signal_description,
                     "info": backtest_result.get('sell_indicator_info')
                 }
+            },
+            "decoupled_approach": {
+                "signal_calculation_separate": True,
+                "conditions_applied_separately": True,
+                "ai_column_detection": True,
+                "reusable_signals": True
             },
             "token_info": {
                 "name": token_name,
@@ -379,7 +526,7 @@ async def execute_trade(strategy: StrategyModel, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         print(f"Error executing trade: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to execute trade")
+        raise HTTPException(status_code=500, detail="Failed to execute trade") 
 
 @router.get("/strategy/user/{wallet_address}")
 async def get_user_strategies(wallet_address: str, db: Session = Depends(get_db)):

@@ -21,7 +21,7 @@ from backtest_utils.geckoterminal_backtracker.api.gecko_api import GeckoTerminal
 from backtest_utils.geckoterminal_backtracker.utils.data_fetcher import OHLCDataFetcher
 from backtest_utils.geckoterminal_backtracker.analysis.ai_indicator_runner import generate_ai_indicator as _generate_ai_indicator
 from backtest_utils.geckoterminal_backtracker.analysis.indicator_backtester import (
-    find_indicator_file, backtest_indicators, plot_backtest_results, resample_ohlc
+    find_indicator_file, backtest_indicators, plot_backtest_results, resample_ohlc, calculate_trading_stats
 )
 
 
@@ -438,3 +438,325 @@ def apply_indicator_code(df: pd.DataFrame, indicator_code: str, indicator_name: 
         raise Exception(f"Failed to apply indicator {indicator_name}: {str(e)}")
 
 # Removed unused backtest_indicators_with_df function - now using backtest_indicators with use_existing_indicators=True 
+
+def generate_signal_calculation_code_from_prompt(signal_description: str, signal_name: str, model: str = 'gpt-4o', api_key: str = None) -> str:
+    """
+    Generate signal calculation code from natural language prompt (only calculates signal values, not buy/sell signals)
+    
+    Args:
+        signal_description (str): Natural language description of the signal
+        signal_name (str): Name for the signal column
+        model (str): OpenAI model to use (default: 'gpt-4o')
+        api_key (str, optional): OpenAI API key. If None, uses environment variable
+        
+    Returns:
+        str: Generated Python code for signal calculation
+    """
+    print(f"Generating signal calculation code...")
+    print(f"Signal: {signal_name}")
+    print(f"Description: {signal_description}")
+    print(f"Model: {model}")
+    
+    try:
+        # Import AIIndicatorGenerator here to avoid circular imports
+        from backtest_utils.geckoterminal_backtracker.analysis.ai_indicator_generator import AIIndicatorGenerator
+        
+        # Initialize the generator
+        generator = AIIndicatorGenerator(api_key=api_key)
+        
+        # Generate the signal calculation code
+        code = generator.generate_signal_calculation_code(signal_description, signal_name, model)
+        
+        print("Successfully generated signal calculation code")
+        return code
+        
+    except Exception as e:
+        print(f"Error generating signal calculation code: {str(e)}")
+        raise Exception(f"Failed to generate signal calculation code: {str(e)}")
+
+
+def apply_signal_calculation_code(df: pd.DataFrame, signal_code: str, signal_name: str) -> tuple:
+    """
+    Apply signal calculation code to DataFrame
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        signal_code (str): Python code for signal calculation
+        signal_name (str): Expected signal name
+        
+    Returns:
+        tuple: (df_with_signal, signal_column_name)
+    """
+    try:
+        # Create a local namespace for execution
+        local_vars = {'df': df.copy(), 'pd': pd, 'np': np}
+        
+        print(f"Applying signal calculation code for: {signal_name}")
+        print(f"Input DataFrame columns: {list(df.columns)}")
+        print(f"DataFrame shape: {df.shape}")
+        
+        print("Executing signal calculation code:\n", signal_code)
+        
+        # Execute the signal calculation code
+        exec(signal_code, globals(), local_vars)
+        
+        print(f"After execution, local_vars keys: {list(local_vars.keys())}")
+        
+        # Check if the function was executed and returned results
+        updated_df = local_vars.get('df')
+        signal_column = local_vars.get('signal_column', signal_name)
+        
+        # If the function was defined but not executed, execute it manually
+        if 'calculate_signal' in local_vars and (signal_column == signal_name and signal_column not in updated_df.columns):
+            print("Function defined but not executed, running manually...")
+            calculate_signal_func = local_vars['calculate_signal']
+            updated_df, signal_column = calculate_signal_func(updated_df)
+            print(f"Manual execution completed, signal column: {signal_column}")
+        
+        if updated_df is not None:
+            print(f"Updated DataFrame columns: {list(updated_df.columns)}")
+            
+            # Verify the signal column exists
+            if signal_column in updated_df.columns:
+                print(f"✅ Signal column '{signal_column}' successfully identified/added")
+                
+                # Check if this was an existing column or newly calculated
+                if signal_column in df.columns:
+                    print(f"   📋 Used existing column: {signal_column}")
+                else:
+                    print(f"   🧮 Calculated new column: {signal_column}")
+                
+                # Show signal statistics
+                if updated_df[signal_column].dtype in ['int64', 'int32', 'float64', 'float32']:
+                    signal_stats = updated_df[signal_column].describe()
+                    print(f"   📊 Signal stats: min={signal_stats['min']:.2f}, max={signal_stats['max']:.2f}, mean={signal_stats['mean']:.2f}")
+                else:
+                    print(f"   📊 Signal data type: {updated_df[signal_column].dtype}")
+                
+                return updated_df, signal_column
+            else:
+                # Try to find any new columns that were added
+                new_columns = [col for col in updated_df.columns if col not in df.columns]
+                if new_columns:
+                    print(f"Found new columns: {new_columns}")
+                    return updated_df, new_columns[0]  # Use the first new column
+                else:
+                    raise ValueError(f"Signal column '{signal_column}' was not found in DataFrame")
+        else:
+            raise ValueError("DataFrame was not updated after code execution")
+        
+    except Exception as e:
+        print(f"❌ Error applying signal calculation code for {signal_name}: {e}")
+        print(f"Code that failed:\n{signal_code}")
+        raise Exception(f"Failed to apply signal calculation code for {signal_name}: {str(e)}")
+
+
+def apply_condition_to_signal(df: pd.DataFrame, signal_column: str, operator: str, threshold: float, condition_type: str = 'buy') -> pd.DataFrame:
+    """
+    Apply condition (operator + threshold) to signal column to generate buy/sell signals
+    
+    Args:
+        df (pd.DataFrame): DataFrame with signal column
+        signal_column (str): Name of the signal column
+        operator (str): Comparison operator ('>', '<', '>=', '<=', '==', '!=')
+        threshold (float): Threshold value
+        condition_type (str): 'buy' or 'sell' to determine which signal column to create
+        
+    Returns:
+        pd.DataFrame: DataFrame with buy_signal or sell_signal column added
+    """
+    try:
+        print(f"Applying {condition_type} condition: {signal_column} {operator} {threshold}")
+        print(f"Input DataFrame columns: {list(df.columns)}")
+        
+        # Create a copy of the DataFrame to preserve all columns
+        df_copy = df.copy()
+        
+        # Ensure the signal column exists
+        if signal_column not in df_copy.columns:
+            raise ValueError(f"Signal column '{signal_column}' not found in DataFrame")
+        
+        # Create the appropriate signal column (don't overwrite if exists)
+        signal_col_name = f"{condition_type}_signal"
+        if signal_col_name not in df_copy.columns:
+            df_copy[signal_col_name] = 0
+        
+        # Apply the condition based on operator
+        if operator == '>':
+            condition = df_copy[signal_column] > threshold
+        elif operator == '<':
+            condition = df_copy[signal_column] < threshold
+        elif operator == '>=':
+            condition = df_copy[signal_column] >= threshold
+        elif operator == '<=':
+            condition = df_copy[signal_column] <= threshold
+        elif operator == '==':
+            condition = df_copy[signal_column] == threshold
+        elif operator == '!=':
+            condition = df_copy[signal_column] != threshold
+        else:
+            raise ValueError(f"Unsupported operator: {operator}")
+        
+        # Set signal where condition is true
+        df_copy.loc[condition, signal_col_name] = 1
+        
+        signal_count = df_copy[signal_col_name].sum()
+        print(f"Generated {signal_count} {condition_type} signals")
+        print(f"Output DataFrame columns: {list(df_copy.columns)}")
+        
+        return df_copy
+        
+    except Exception as e:
+        print(f"Error applying condition to signal: {e}")
+        raise Exception(f"Failed to apply condition to signal: {str(e)}")
+
+
+def check_signal_column_exists(df: pd.DataFrame, signal_name: str) -> bool:
+    """
+    Check if a signal column already exists in the DataFrame
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        signal_name (str): Name of the signal to check
+        
+    Returns:
+        bool: True if signal column exists, False otherwise
+    """
+    # Check for exact column name or common variations
+    possible_names = [
+        signal_name,
+        signal_name.lower(),
+        signal_name.upper(),
+        signal_name.replace(' ', '_'),
+        signal_name.replace(' ', '_').lower(),
+        signal_name.replace('_', ' '),
+    ]
+    
+    for col_name in possible_names:
+        if col_name in df.columns:
+            print(f"Found existing signal column: {col_name}")
+            return True
+    
+    return False
+
+def run_backtest_with_prepared_signals(
+    df: pd.DataFrame,
+    network: str,
+    token_symbol: str,
+    timeframe: str,
+    time_start: str,
+    time_end: str,
+    buy_signal_name: str = None,
+    sell_signal_name: str = None
+):
+    """
+    Run backtest with a DataFrame that already has buy_signal and sell_signal columns
+    
+    Args:
+        df (pd.DataFrame): DataFrame with OHLC data and buy_signal/sell_signal columns
+        network (str): Network name
+        token_symbol (str): Token symbol  
+        timeframe (str): Timeframe used
+        time_start (str): Start time
+        time_end (str): End time
+        buy_signal_name (str): Name of buy signal for display
+        sell_signal_name (str): Name of sell signal for display
+        
+    Returns:
+        dict: Backtest results with trading statistics and plotly figure
+    """
+    print(f"Running backtest with prepared signals...")
+    print(f"DataFrame shape: {df.shape}")
+    print(f"Buy signal name: {buy_signal_name}")
+    print(f"Sell signal name: {sell_signal_name}")
+    
+    # Verify required columns exist
+    required_columns = ['buy_signal', 'sell_signal', 'open', 'high', 'low', 'close', 'volume']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise Exception(f"Missing required columns: {missing_columns}")
+    
+    # Check signal counts
+    buy_signals = df['buy_signal'].sum()
+    sell_signals = df['sell_signal'].sum()
+    print(f"Buy signals: {buy_signals}")
+    print(f"Sell signals: {sell_signals}")
+    
+    if buy_signals == 0 and sell_signals == 0:
+        return {
+            "error": "No trading signals found in DataFrame",
+            "buy_signals": 0,
+            "sell_signals": 0,
+            "trading_stats": {}
+        }
+    
+    try:
+        # Convert datetime if needed
+        if 'datetime' in df.columns and not pd.api.types.is_datetime64_any_dtype(df['datetime']):
+            df['datetime'] = pd.to_datetime(df['datetime'])
+        
+        # Calculate trading stats
+        stats = calculate_trading_stats(df, ['buy_signal'], ['sell_signal'])
+        
+        # Create indicator info for plotting
+        buy_indicator_info = {
+            'name': buy_signal_name or "Buy Signal",
+            'path': 'database',
+            'code': 'stored_in_database',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'new_columns': ['buy_signal']
+        }
+        
+        sell_indicator_info = {
+            'name': sell_signal_name or "Sell Signal",
+            'path': 'database',
+            'code': 'stored_in_database',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'new_columns': ['sell_signal']
+        }
+        
+        # Generate plot
+        fig = plot_backtest_results(
+            df=df,
+            buy_indicator_info=buy_indicator_info,
+            sell_indicator_info=sell_indicator_info,
+            buy_signal_columns=['buy_signal'],
+            sell_signal_columns=['sell_signal'],
+            title=None,   # will be generated in the code
+            network=network,
+            pool=None,  # We don't have pool info here
+            timeframe=timeframe,
+            aggregate=1
+        )
+        
+        # Format the result
+        result = {
+            "success": True,
+            "buy_signals": int(buy_signals),
+            "sell_signals": int(sell_signals),
+            "data_points": len(df),
+            "timeframe": timeframe,
+            "time_range": {"start": time_start, "end": time_end},
+            "trading_stats": stats,
+            "buy_indicator_info": {
+                "name": buy_signal_name or "Buy Signal",
+                "signals_generated": int(buy_signals)
+            },
+            "sell_indicator_info": {
+                "name": sell_signal_name or "Sell Signal", 
+                "signals_generated": int(sell_signals)
+            },
+            "plotly_figure": fig.to_json() if fig else None
+        }
+        
+        print("Backtest completed successfully")
+        return result
+        
+    except Exception as e:
+        print(f"Error running backtest: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "buy_signals": int(buy_signals) if 'buy_signals' in locals() else 0,
+            "sell_signals": int(sell_signals) if 'sell_signals' in locals() else 0
+        } 
