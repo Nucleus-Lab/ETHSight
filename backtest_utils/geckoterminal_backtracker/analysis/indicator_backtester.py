@@ -285,35 +285,8 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
     
     print(f"[DEBUG] Using signal columns - Buy: {buy_signal_col}, Sell: {sell_signal_col}")
     
-    # Get buy signals
-    if df[buy_signal_col].dtype == 'bool':
-        buy_signals = df[df[buy_signal_col] == True].copy()
-    else:
-        buy_signals = df[df[buy_signal_col] == 1].copy()
-    
-    # Get sell signals
-    if sell_signal_col:
-        if df[sell_signal_col].dtype == 'bool':
-            sell_signals = df[df[sell_signal_col] == True].copy()
-        else:
-            sell_signals = df[df[sell_signal_col] == 1].copy()
-    else:
-        # If no sell signal column, create sell signals after each buy signal
-        sell_signals = pd.DataFrame()
-        in_position = False
-        
-        for idx, row in df.iterrows():
-            if row[buy_signal_col] == 1 and not in_position:
-                in_position = True
-            elif in_position:  # Already in position, next non-buy signal is sell
-                if row[buy_signal_col] != 1:
-                    sell_signals = pd.concat([sell_signals, pd.DataFrame([row])])
-                    in_position = False
-    
-    print(f"[DEBUG] Raw buy signals: {len(buy_signals)}")
-    print(f"[DEBUG] Raw sell signals: {len(sell_signals)}")
-    
-    # Calculate cumulative PnL with position accumulation
+    # Create a list to store buy entries with their costs
+    buy_entries = []  # List of tuples (entry_time, quantity, cost)
     current_position = 0  # Number of positions held
     total_investment = 0  # Total cost basis
     current_value = 0     # Current value of all positions
@@ -321,41 +294,72 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
     
     # Process all signals chronologically
     for idx, row in df.iterrows():
+        current_time = row['datetime']
+        current_price = row['close']
+        
         # Handle buy signals (can accumulate positions)
         if row[buy_signal_col] == 1:
             current_position += 1
-            position_cost = row['close']
+            position_cost = current_price
             total_investment += position_cost
-            current_value = current_position * row['close']
+            current_value = current_position * current_price
             
-            print(f"[DEBUG] Buy signal at {row['datetime']}: Position={current_position}, Cost={position_cost}")
+            # Record buy entry
+            buy_entries.append({
+                'time': current_time,
+                'price': position_cost,
+                'quantity': 1,
+                'remaining': 1  # Track how much of this position remains
+            })
+            
+            print(f"[DEBUG] Buy signal at {current_time}: Position={current_position}, Cost={position_cost}")
             
         # Handle sell signals (can reduce positions)
-        elif sell_signal_col and row[sell_signal_col] == 1 and current_position > 0:
-            # Calculate profit/loss for the closed position
-            position_value = row['close']
-            avg_cost = total_investment / current_position if current_position > 0 else 0
+        elif sell_signal_col and row[sell_signal_col] == 1 and current_position > 0 and buy_entries:
+            # Sort buy entries by time to ensure FIFO
+            buy_entries.sort(key=lambda x: x['time'])
             
-            # Close one position
-            current_position -= 1
-            if current_position > 0:
-                # Update total investment proportionally
-                total_investment = avg_cost * current_position
-            else:
-                total_investment = 0
+            # Only process sells that have corresponding earlier buys
+            valid_buys = [b for b in buy_entries if b['time'] < current_time and b['remaining'] > 0]
+            
+            if valid_buys:
+                # Get the earliest buy with remaining quantity
+                buy_entry = valid_buys[0]
                 
-            current_value = current_position * row['close']
-            
-            # Calculate PnL percentage
-            if avg_cost > 0:
-                trade_pnl_pct = ((position_value - avg_cost) / avg_cost) * 100
+                # Calculate profit/loss for this specific trade
+                entry_price = buy_entry['price']
+                trade_pnl_pct = ((current_price - entry_price) / entry_price) * 100
+                
+                # Update position tracking
+                buy_entry['remaining'] -= 1
+                current_position -= 1
+                
+                # Update total investment
+                if current_position > 0:
+                    # Remove this trade's cost from total investment
+                    total_investment -= entry_price
+                else:
+                    total_investment = 0
+                
+                current_value = current_position * current_price
                 cumulative_pnl += trade_pnl_pct
                 
-            print(f"[DEBUG] Sell signal at {row['datetime']}: Position={current_position}, Value={position_value}, PnL={trade_pnl_pct:.2f}%")
+                # Record the trade
+                stats['trades'].append({
+                    'buy_time': buy_entry['time'].isoformat(),
+                    'sell_time': current_time.isoformat(),
+                    'buy_price': float(entry_price),
+                    'sell_price': float(current_price),
+                    'profit': float(trade_pnl_pct)
+                })
+                
+                print(f"[DEBUG] Sell signal at {current_time}: Position={current_position}, Value={current_price}, PnL={trade_pnl_pct:.2f}%")
+            else:
+                print(f"[DEBUG] Ignored sell signal at {current_time} - no valid buy entries found")
             
         # Update current value for open positions
         elif current_position > 0:
-            current_value = current_position * row['close']
+            current_value = current_position * current_price
         
         # Calculate and store cumulative PnL percentage
         if total_investment > 0:
@@ -366,33 +370,27 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
             
         df.at[idx, 'cumulative_pnl'] = df.at[idx, 'pnl_percentage']
     
-    # Calculate trading statistics
-    if not buy_signals.empty and not sell_signals.empty:
+    # Calculate final trading statistics
+    completed_trades = len(stats['trades'])
+    if completed_trades > 0:
         stats['has_signals'] = True
-        stats['total_trades'] = len(sell_signals)  # Count completed trades
-        stats['total_return'] = float(df['pnl_percentage'].iloc[-1])  # Final cumulative return
-        stats['avg_return'] = float(stats['total_return'] / stats['total_trades']) if stats['total_trades'] > 0 else 0
+        stats['total_trades'] = completed_trades
+        stats['total_return'] = float(df['pnl_percentage'].iloc[-1])
+        stats['avg_return'] = stats['total_return'] / completed_trades
         
         # Count profitable trades
-        stats['profitable_trades'] = sum(1 for pnl in df['pnl_percentage'].diff().dropna() if pnl > 0)
-        stats['win_rate'] = stats['profitable_trades'] / stats['total_trades'] * 100 if stats['total_trades'] > 0 else 0
-        
-        # Record individual trades
-        for i, (buy_signal, sell_signal) in enumerate(zip(buy_signals.itertuples(), sell_signals.itertuples())):
-            trade_return = ((sell_signal.close - buy_signal.close) / buy_signal.close) * 100
-            stats['trades'].append({
-                'buy_time': buy_signal.datetime.isoformat(),
-                'sell_time': sell_signal.datetime.isoformat(),
-                'buy_price': float(buy_signal.close),
-                'sell_price': float(sell_signal.close),
-                'profit': float(trade_return)
-            })
+        stats['profitable_trades'] = sum(1 for trade in stats['trades'] if trade['profit'] > 0)
+        stats['win_rate'] = (stats['profitable_trades'] / completed_trades) * 100
     
     # Ensure all numeric values are basic Python types (not numpy or pandas types)
     stats = {k: float(v) if isinstance(v, (np.floating, np.integer)) else v 
             for k, v in stats.items()}
     
     print(f"[DEBUG] Final stats: {stats}")
+    print(f"[DEBUG] Open positions at end: {current_position}")
+    if current_position > 0:
+        print(f"[DEBUG] Warning: {current_position} positions still open at end of backtest")
+        
     return stats
 
 def calculate_macd(df, fast_period=12, slow_period=26, signal_period=9):
