@@ -341,6 +341,7 @@ export const runBacktest = async (strategy) => {
       success: true,
       fig: data.fig,
       backtest_results: data.backtest_results,
+      strategy: data.strategy,
       signals: {
         filter: {
           id: data.results?.filterSignal?.id,
@@ -350,12 +351,16 @@ export const runBacktest = async (strategy) => {
         buy: {
           id: data.results?.buySignal?.id,
           name: data.results?.buySignal?.name,
-          description: data.results?.buySignal?.description
+          description: data.results?.buySignal?.description,
+          operator: data.strategy?.buyCondition?.operator,
+          threshold: data.strategy?.buyCondition?.threshold
         },
         sell: {
           id: data.results?.sellSignal?.id,
           name: data.results?.sellSignal?.name,
-          description: data.results?.sellSignal?.description
+          description: data.results?.sellSignal?.description,
+          operator: data.strategy?.sellCondition?.operator,
+          threshold: data.strategy?.sellCondition?.threshold
         }
       }
     };

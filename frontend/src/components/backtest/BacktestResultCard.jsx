@@ -174,15 +174,25 @@ const BacktestResultCard = ({ result, resultId }) => {
               </div>
             )}
             {result.signals.buy && (
-              <div>
-                <p className="font-medium">Buy Signal: {result.signals.buy.name}</p>
+              <div className="border-l-4 border-green-500 pl-3">
+                <p className="font-medium text-green-700">Buy Signal: {result.signals.buy.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.buy.description}</p>
+                {result.signals.buy.operator && result.signals.buy.threshold !== undefined && (
+                  <p className="text-sm text-green-600 font-medium mt-1">
+                    Condition: {result.signals.buy.operator} {result.signals.buy.threshold}
+                  </p>
+                )}
               </div>
             )}
             {result.signals.sell && (
-              <div>
-                <p className="font-medium">Sell Signal: {result.signals.sell.name}</p>
+              <div className="border-l-4 border-red-500 pl-3">
+                <p className="font-medium text-red-700">Sell Signal: {result.signals.sell.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.sell.description}</p>
+                {result.signals.sell.operator && result.signals.sell.threshold !== undefined && (
+                  <p className="text-sm text-red-600 font-medium mt-1">
+                    Condition: {result.signals.sell.operator} {result.signals.sell.threshold}
+                  </p>
+                )}
               </div>
             )}
           </div>
