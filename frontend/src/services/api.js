@@ -341,7 +341,11 @@ export const runBacktest = async (strategy) => {
       success: true,
       fig: data.fig,
       backtest_results: data.backtest_results,
-      strategy: data.strategy,
+      strategy: {
+        ...data.strategy,
+        network: data.strategy.network,
+        timeframe: data.strategy.timeframe
+      },
       signals: {
         filter: {
           id: data.results?.filterSignal?.id,

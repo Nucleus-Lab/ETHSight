@@ -5,6 +5,21 @@ import { Switch } from '@headlessui/react';
 import 'react-datepicker/dist/react-datepicker.css';
 import { getAllSignalsForUser, runBacktest, executeTrade } from '../../services/api';
 
+// Add these constants at the top of the file after imports
+const NETWORKS = [
+  { value: 'eth', label: 'Ethereum' },
+  { value: 'bsc', label: 'BSC' }
+];
+
+const TIMEFRAMES = [
+  { value: '1m', label: '1 Minute' },
+  { value: '5m', label: '5 Minutes' },
+  { value: '15m', label: '15 Minutes' },
+  { value: '1h', label: '1 Hour' },
+  { value: '4h', label: '4 Hours' },
+  { value: '1d', label: '1 Day' }
+];
+
 const StrategyForm = ({ onSubmit }) => {
   const { authenticated, user } = usePrivy();
   const [loading, setLoading] = useState(false);
@@ -29,7 +44,11 @@ const StrategyForm = ({ onSubmit }) => {
   const [positionSize, setPositionSize] = useState(1);
   const [maxPositionValue, setMaxPositionValue] = useState(10000);
   
-  const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 days ago
+  // Add new state for network and timeframe
+  const [network, setNetwork] = useState('eth');
+  const [timeframe, setTimeframe] = useState('1d');
+  
+  const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [endDate, setEndDate] = useState(new Date());
   
   // Fetch signals from API
@@ -125,7 +144,9 @@ const StrategyForm = ({ onSubmit }) => {
         start: startDate.toISOString(),
         end: endDate.toISOString()
       },
-      wallet_address: user.wallet.address
+      wallet_address: user.wallet.address,
+      network,
+      timeframe
     };
     
     console.log(`Strategy to ${isTradeMode ? 'trade' : 'backtest'}:`, strategy);
@@ -134,14 +155,11 @@ const StrategyForm = ({ onSubmit }) => {
       let result;
       
       if (isTradeMode) {
-        // Execute real trade
         result = await executeTrade(strategy);
       } else {
-        // Run backtest
         result = await runBacktest(strategy);
       }
       
-      // Call the onSubmit prop with the results
       if (onSubmit) {
         onSubmit(result);
       }
@@ -358,6 +376,43 @@ const StrategyForm = ({ onSubmit }) => {
               required
               disabled={signals.length === 0}
             />
+          </div>
+        </div>
+        
+        {/* Add Network and Timeframe Selection before Time Range */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Network
+            </label>
+            <select
+              value={network}
+              onChange={(e) => setNetwork(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
+              required
+              disabled={signals.length === 0}
+            >
+              {NETWORKS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Timeframe
+            </label>
+            <select
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
+              required
+              disabled={signals.length === 0}
+            >
+              {TIMEFRAMES.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
           </div>
         </div>
         

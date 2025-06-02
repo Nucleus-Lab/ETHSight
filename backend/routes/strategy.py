@@ -42,6 +42,8 @@ class StrategyModel(BaseModel):
     maxPositionValue: float
     timeRange: Dict[str, str]
     wallet_address: str
+    network: str  # 'eth' or 'bsc'
+    timeframe: str  # '1m', '5m', '15m', '1h', '4h', '1d'
 
 class SignalInfo(BaseModel):
     signal_id: int
@@ -55,6 +57,8 @@ class StrategyWithSignals(BaseModel):
     positionSize: float
     maxPositionValue: float
     timeRange: Dict[str, str]
+    network: str
+    timeframe: str
     
 def get_signal_info(db: Session, signal_id: int) -> SignalInfo:
     """Helper function to get signal information from database"""
@@ -71,7 +75,7 @@ def get_signal_info(db: Session, signal_id: int) -> SignalInfo:
 def filter_token_info(filter_signal_name: str, filter_signal_description: str):
     """Get token information based on filter signal"""
     msg = f"""Get the token name, token symbol, and token contract address for the token that meets the {filter_signal_name} condition: {filter_signal_description}. 
-    No visualization. I just want the csv data of the contract address. 
+    No visualization. I only want the csv data of the contract address. 
     The csv data should have the following columns: token_name, token_symbol, token_contract_address (no need to mind the column order)
     """
     from agents.controller import process_with_claude
@@ -156,7 +160,9 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             ),
             positionSize=strategy.positionSize,
             maxPositionValue=strategy.maxPositionValue,
-            timeRange=strategy.timeRange
+            timeRange=strategy.timeRange,
+            network=strategy.network,
+            timeframe=strategy.timeframe
         )
         
         print(f"Running backtest for strategy with signals:")
@@ -182,14 +188,14 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
         print("="*60)
         try:
             # Search for pool address
-            pool_address = search_and_get_pool_address("eth", token_symbol)
+            pool_address = search_and_get_pool_address(strategy.network, token_symbol)
             print(f"✅ Found pool address: {pool_address}")
             
             # Fetch OHLC data
             data_file_path = fetch_ohlc_data(
-                network="eth",
+                network=strategy.network,
                 pool_address=pool_address,
-                timeframe="1d",
+                timeframe=strategy.timeframe,
                 time_start=strategy.timeRange['start'],
                 time_end=strategy.timeRange['end']
             )
@@ -276,8 +282,8 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             }
         
         # Set network and timeframe parameters
-        network = "eth"  # You can make this configurable
-        timeframe = "1d"  # You can make this configurable based on strategy
+        network = strategy.network
+        timeframe = strategy.timeframe
         
         # Step 3: Run backtest with the prepared signals (DECOUPLED APPROACH)
         print("\n" + "="*60) 
@@ -311,9 +317,9 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
                 time_end=strategy.timeRange['end'],
                 trading_stats=backtest_result['trading_stats'],
                 data_points=backtest_result.get('data_points'),
-                network="eth",
+                network=strategy.network,
                 token_symbol=token_symbol,
-                timeframe="1d"
+                timeframe=strategy.timeframe
             )
             print(f"✅ Saved backtest history with ID: {backtest_history.backtest_id}")
         except Exception as e:
@@ -404,7 +410,9 @@ async def execute_trade(strategy: StrategyModel, db: Session = Depends(get_db)):
             ),
             positionSize=strategy.positionSize,
             maxPositionValue=strategy.maxPositionValue,
-            timeRange=strategy.timeRange
+            timeRange=strategy.timeRange,
+            network=strategy.network,
+            timeframe=strategy.timeframe
         )
         
         # TODO: Implement actual trade execution logic here
