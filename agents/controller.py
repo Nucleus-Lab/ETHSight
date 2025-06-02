@@ -84,48 +84,48 @@ tools = [
             "required": ["file_path", "prompt"]
         }
     },
-    {
-        "name": "get_cmc_ohlcv",
-        "description": "Get historical OHLCV data from CoinMarketCap",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Alternatively pass one or more comma-separated cryptocurrency symbols. Example: 'BTC,ETH'"
-                },
-                "time_period": {
-                    "type": "string",
-                    "description": "Time period to return OHLCV data for. Options: 'daily', 'hourly'",
-                    "default": "daily"
-                },
-                "time_start": {
-                    "type": "string",
-                    "description": "Start time in ISO format (e.g., '2025-05-11T00:00:00.000Z')"
-                },
-                "time_end": {
-                    "type": "string",
-                    "description": "End time in ISO format (e.g., '2025-05-18T00:00:00.000Z')"
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "Limit the number of time periods to return. Defaults to 10, max 10000",
-                    "default": 10
-                },
-                "interval": {
-                    "type": "string",
-                    "description": "Adjust the interval that time_period is sampled. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'; Other: 'hourly', 'daily', 'weekly', 'monthly', 'yearly'",
-                    "default": "daily"
-                },
-                "convert": {
-                    "type": "string",
-                    "description": "Currency to convert to",
-                    "default": "USD"
-                }
-            },
-            "required": ["symbol", "time_start", "time_end", "interval"]
-        }
-    }
+    # {
+    #     "name": "get_cmc_ohlcv",
+    #     "description": "Get historical OHLCV data from CoinMarketCap",
+    #     "input_schema": {
+    #         "type": "object",
+    #         "properties": {
+    #             "symbol": {
+    #                 "type": "string",
+    #                 "description": "Alternatively pass one or more comma-separated cryptocurrency symbols. Example: 'BTC,ETH'"
+    #             },
+    #             "time_period": {
+    #                 "type": "string",
+    #                 "description": "Time period to return OHLCV data for. Options: 'daily', 'hourly'",
+    #                 "default": "daily"
+    #             },
+    #             "time_start": {
+    #                 "type": "string",
+    #                 "description": "Start time in ISO format (e.g., '2025-05-11T00:00:00.000Z')"
+    #             },
+    #             "time_end": {
+    #                 "type": "string",
+    #                 "description": "End time in ISO format (e.g., '2025-05-18T00:00:00.000Z')"
+    #             },
+    #             "count": {
+    #                 "type": "integer",
+    #                 "description": "Limit the number of time periods to return. Defaults to 10, max 10000",
+    #                 "default": 10
+    #             },
+    #             "interval": {
+    #                 "type": "string",
+    #                 "description": "Adjust the interval that time_period is sampled. Options: Hours: '1h', '2h', '3h', '4h', '6h', '12h'; Days: '1d', '2d', '3d', '7d', '14d', '15d', '30d', '60d', '90d', '365d'; Other: 'hourly', 'daily', 'weekly', 'monthly', 'yearly'",
+    #                 "default": "daily"
+    #             },
+    #             "convert": {
+    #                 "type": "string",
+    #                 "description": "Currency to convert to",
+    #                 "default": "USD"
+    #             }
+    #         },
+    #         "required": ["symbol", "time_start", "time_end", "interval"]
+    #     }
+    # }
 ]
 
 def process_tool_calls(message: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -197,45 +197,45 @@ def execute_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
                     "tool_name": tool_name,
                     "result": "Failed to process data"
                 }
-        elif tool_name == "get_cmc_ohlcv":
-            api_key = os.getenv("CMC_API_KEY")
-            if not api_key:
-                return {
-                    "tool_name": tool_name,
-                    "result": "CMC_API_KEY not found in environment variables"
-                }
-            cmc = CMCAPI(api_key=api_key)
-            df = cmc.get_ohlcv(
-                symbol=args["symbol"],
-                time_period=args.get("time_period", "daily"),
-                time_start=args.get("time_start"),
-                time_end=args.get("time_end"),
-                count=args.get("count", 10),
-                interval=args.get("interval", "daily"),
-                convert=args.get("convert", "USD")
-            )
-            if df is not None and not df.empty:
-                # Generate a unique filename
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                file_id = str(uuid.uuid4())
-                file_path = f"data/cmc_data/cmc_{args['symbol']}_{args.get('interval', '1d')}_{timestamp}_{file_id}.csv"
+        # elif tool_name == "get_cmc_ohlcv":
+        #     api_key = os.getenv("CMC_API_KEY")
+        #     if not api_key:
+        #         return {
+        #             "tool_name": tool_name,
+        #             "result": "CMC_API_KEY not found in environment variables"
+        #         }
+        #     cmc = CMCAPI(api_key=api_key)
+        #     df = cmc.get_ohlcv(
+        #         symbol=args["symbol"],
+        #         time_period=args.get("time_period", "daily"),
+        #         time_start=args.get("time_start"),
+        #         time_end=args.get("time_end"),
+        #         count=args.get("count", 10),
+        #         interval=args.get("interval", "daily"),
+        #         convert=args.get("convert", "USD")
+        #     )
+        #     if df is not None and not df.empty:
+        #         # Generate a unique filename
+        #         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        #         file_id = str(uuid.uuid4())
+        #         file_path = f"data/cmc_data/cmc_{args['symbol']}_{args.get('interval', '1d')}_{timestamp}_{file_id}.csv"
                 
-                # Save to CSV
-                df.to_csv(file_path)
+        #         # Save to CSV
+        #         df.to_csv(file_path)
                 
-                return {
-                    "tool_name": tool_name,
-                    "result": {
-                        "file_path": file_path,
-                        "df_head": df.head().to_string(),
-                        "description": f"CMC historical OHLCV data for {args['symbol']} with {args.get('interval', '1d')} interval"
-                    }
-                }
-            else:
-                return {
-                    "tool_name": tool_name,
-                    "result": "No data returned from CMC for the given parameters."
-                }
+        #         return {
+        #             "tool_name": tool_name,
+        #             "result": {
+        #                 "file_path": file_path,
+        #                 "df_head": df.head().to_string(),
+        #                 "description": f"CMC historical OHLCV data for {args['symbol']} with {args.get('interval', '1d')} interval"
+        #             }
+        #         }
+        #     else:
+        #         return {
+        #             "tool_name": tool_name,
+        #             "result": "No data returned from CMC for the given parameters."
+        #         }
         else:
             return {
                 "tool_name": tool_name,

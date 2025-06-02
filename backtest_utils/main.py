@@ -12,6 +12,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from backtest_utils.geckoterminal_backtracker.storage.csv_storage import CSVStorage
 from backtest_utils.geckoterminal_backtracker.storage.sqlite_storage import SQLiteStorage
 from backtest_utils.geckoterminal_backtracker.api.gecko_api import GeckoTerminalAPI
@@ -139,8 +142,13 @@ def search_pools(args):
     # 创建 API 客户端
     api = GeckoTerminalAPI()
     
-    # 搜索池子
-    pools = api.search_pools(args.network, args.query)
+    # 搜索池子 - 使用修正后的方法签名
+    pools = api.search_pools(
+        network=args.network,
+        query=args.query,
+        page=1,
+        include=['base_token', 'quote_token', 'dex']
+    )
     
     if not pools:
         print("未找到匹配的池子")

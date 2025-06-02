@@ -221,3 +221,116 @@ import numpy as np
             f.write(full_code)
         
         return file_path
+
+    def generate_signal_calculation_code(self, signal_description: str, signal_name: str, model: str = "gpt-4o") -> str:
+        """
+        根据信号描述生成仅用于计算信号值的代码
+        
+        参数:
+            signal_description (str): 信号的自然语言描述
+            signal_name (str): 信号名称（将用作列名）
+            model (str): 要使用的 OpenAI 模型
+            
+        返回:
+            str: 生成的 Python 代码，用于计算信号值
+        """
+        prompt = self._create_signal_calculation_prompt(signal_description, signal_name)
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "你是一个专业的金融技术指标开发专家，精通 Python 和 pandas。你的任务是将用户的信号描述转换为可执行的 Python 代码，用于计算金融信号值。代码应该接受一个包含 OHLC (Open, High, Low, Close) 和 Volume 列的 pandas DataFrame，计算信号值并返回DataFrame和信号列名。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2000
+        }
+        
+        try:
+            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            
+            result = response.json()
+            code = result['choices'][0]['message']['content']
+            
+            # 提取代码块
+            if "```python" in code:
+                code = code.split("```python")[1].split("```")[0].strip()
+            elif "```" in code:
+                code = code.split("```")[1].split("```")[0].strip()
+            
+            return code
+        
+        except Exception as e:
+            raise Exception(f"调用 OpenAI API 时出错: {str(e)}")
+    
+    def _create_signal_calculation_prompt(self, signal_description: str, signal_name: str) -> str:
+        """
+        创建用于信号计算的提示
+        
+        参数:
+            signal_description (str): 信号的自然语言描述
+            signal_name (str): 信号名称
+            
+        返回:
+            str: 格式化的提示
+        """
+        return f"""
+请根据以下描述创建一个计算金融信号值的 Python 函数:
+
+信号描述: {signal_description}
+信号名称: {signal_name}
+
+要求:
+1. 函数应该接受一个 pandas DataFrame 作为输入，该 DataFrame 包含 open, high, low, close, volume, datetime 列
+2. **首先检查 DataFrame 中是否已经存在与所需信号相匹配的列**
+   - 检查是否有列名与 '{signal_name}' 相同或相似
+   - 检查是否有其他列可以直接用作此信号（例如，如果需要 'volume' 信号，而 DataFrame 中已有 'volume' 列）
+   - 如果找到合适的现有列，直接返回该列名，不要重新计算
+3. 如果没有找到现有的合适列，则计算信号值并添加到 DataFrame 中，列名为 '{signal_name}'
+4. 函数应该返回 (df, signal_column_name) 元组，其中 df 是包含信号列的 DataFrame，signal_column_name 是信号列的名称
+5. 使用 pandas 和 numpy 进行计算
+6. 函数名应该是 calculate_signal
+7. 包含详细的文档字符串，解释信号的计算方法
+8. 代码应该高效且易于理解
+9. 只返回 Python 代码，不要包含任何其他解释
+10. 不要生成买入/卖出信号，只计算信号的数值
+
+重要说明:
+- **优先使用现有列**: 如果 DataFrame 中已有相关列，优先使用而不是重复计算
+- 只计算信号的数值，不要生成买入或卖出信号（不要创建 buy_signal 或 sell_signal 列）
+- 信号值应该是数值类型（float 或 int），可以是连续值
+- 例如：如果是成交量信号，返回成交量的值；如果是 RSI，返回 RSI 的值；如果是价格变化，返回价格变化的百分比等
+
+示例函数格式:
+```python
+def calculate_signal(df):
+    \"\"\"
+    计算{signal_name}信号值
+    
+    参数:
+        df (pandas.DataFrame): 包含 OHLC 和成交量数据的 DataFrame
+        
+    返回:
+        tuple: (df_with_signal, signal_column_name)
+            - df_with_signal: 包含信号列的 DataFrame
+            - signal_column_name: 信号列的名称
+    \"\"\"
+    # 首先检查是否已存在相关列
+    existing_columns = df.columns.tolist()
+    
+    # 检查是否有匹配的现有列
+    ...
+    
+    # 如果没有找到现有列，计算新的信号值
+    df['{signal_name}'] = ...  # 计算逻辑
+    
+    return df, '{signal_name}'
+
+# 执行函数
+df, signal_column = calculate_signal(df)
+```
+
+请只返回 Python 代码，不要包含任何其他解释。确保最后一行执行函数调用。确保首先检查现有列，避免不必要的重复计算。
+不要在你的代码里定义df，之后调用你生成的代码的时候自然会有满足条件的df。
+"""

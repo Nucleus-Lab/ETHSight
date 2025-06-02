@@ -130,7 +130,7 @@ class OHLCAnalyzer:
         return file_path
     
     def plot_with_indicators(self, indicators: List[str], title: Optional[str] = None, 
-                            save_path: Optional[str] = None, show: bool = True,
+                            save_path: Optional[str] = None, show: bool = False,
                             save_json: Optional[str] = None, timeframe: str = 'day',
                             aggregate: int = 1) -> None:
         """

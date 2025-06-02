@@ -140,26 +140,37 @@ class GeckoTerminalAPI:
             print(f"Error fetching pool info: {e}")
             return {}
     
-    def search_pools(self, network, query, page=1, per_page=100):
+    def search_pools(self, network=None, query=None, page=1, per_page=20, include=None):
         """
         搜索池子
         
         参数:
-            network (str): 网络 ID
-            query (str): 搜索关键词
-            page (int): 页码
-            per_page (int): 每页结果数
+            network (str, optional): 网络 ID，如果不提供则搜索所有网络
+            query (str): 搜索关键词 (pool address, token address, or token symbol)
+            page (int): 页码，默认为1
+            per_page (int): 每页结果数，默认为20 (API限制最大20)
+            include (list, optional): 要包含的相关资源，如 ['base_token', 'quote_token', 'dex']
             
         返回:
             list: 池子列表
         """
-        url = f"{self.BASE_URL}/networks/{network}/search"
+        url = f"{self.BASE_URL}/search/pools"
         
         params = {
-            'query': query,
-            'page': page,
-            'per_page': per_page
+            'page': page
         }
+        
+        # 添加查询参数
+        if query:
+            params['query'] = query
+            
+        # 添加网络过滤（可选）
+        if network:
+            params['network'] = network
+            
+        # 添加包含的相关资源
+        if include:
+            params['include'] = ','.join(include)
         
         try:
             response = self.session.get(url, params=params)
@@ -170,6 +181,9 @@ class GeckoTerminalAPI:
             
         except requests.exceptions.RequestException as e:
             print(f"Error searching pools: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response text: {e.response.text}")
             return []
     
     def get_trending_pools(self, network, page=1, per_page=100):

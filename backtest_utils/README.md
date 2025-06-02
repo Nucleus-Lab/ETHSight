@@ -2,6 +2,44 @@
 
 这是一个基于 Python 的链上数据回溯系统，专注于从 GeckoTerminal DEX API 获取和分析 OHLC 数据。系统支持多种时间周期的数据获取、存储和分析，可用于 DEX 交易池的历史数据回溯和技术分析。
 
+## 🚀 新功能：Strategy Interface
+
+为了更好地与 `strategy.py` 集成，我们提供了一个简化的接口模块，提供两个核心函数：
+
+### 快速开始
+
+```python
+from backtest_utils.strategy_interface import (
+    generate_indicator_from_prompt,
+    run_backtest_with_indicators
+)
+
+# 1. 生成指标
+file_path, name = generate_indicator_from_prompt(
+    user_prompt="Create a RSI indicator with buy signal when RSI < 30",
+    indicator_name="RSI_Strategy"
+)
+
+# 2. 运行回测
+result = run_backtest_with_indicators(
+    network="eth",
+    token_symbol="ETH", 
+    timeframe="1d",
+    time_start="2024-01-01T00:00:00Z",
+    time_end="2024-02-01T00:00:00Z",
+    buy_indicator_name="RSI_Buy",
+    sell_indicator_name="RSI_Sell"
+)
+
+# 3. 获取结果
+stats = result['trading_stats']
+plotly_figure = result['plotly_figure']
+```
+
+📖 **详细文档**: [Strategy Interface README](./STRATEGY_INTERFACE_README.md)
+
+---
+
 ## 功能特点
 
 - 从 GeckoTerminal API 获取 DEX 交易池的 OHLC 数据

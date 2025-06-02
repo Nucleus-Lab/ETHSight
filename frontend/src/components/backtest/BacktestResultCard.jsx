@@ -12,6 +12,8 @@ const BacktestResultCard = ({ result, resultId }) => {
     );
   }
 
+  console.log('result received in BacktestResultCard', result)
+
   // Parse and validate Plotly data
   const plotlyData = useMemo(() => {
     if (!result.fig) return null;
@@ -66,74 +68,67 @@ const BacktestResultCard = ({ result, resultId }) => {
         <div className="bg-gray-50 p-3 rounded-md">
           <p className="text-sm text-gray-500">Total Return</p>
           <p className={`text-2xl font-semibold ${
-            result.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
+            result.backtest_results?.trading_stats?.total_return >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
-            {formatPercentage(result.performance.totalReturn)}
+            {result.backtest_results?.trading_stats?.total_return ? 
+              formatPercentage(result.backtest_results.trading_stats.total_return) : 'N/A'}
+          </p>
+        </div>
+
+        <div className="bg-gray-50 p-3 rounded-md">
+          <p className="text-sm text-gray-500">Avg Return</p>
+          <p className={`text-2xl font-semibold ${
+            result.backtest_results?.trading_stats?.avg_return >= 0 ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {result.backtest_results?.trading_stats?.avg_return ? 
+              formatPercentage(result.backtest_results.trading_stats.avg_return) : 'N/A'}
           </p>
         </div>
         
         <div className="bg-gray-50 p-3 rounded-md">
-          <p className="text-sm text-gray-500">Sharpe Ratio</p>
+          <p className="text-sm text-gray-500">Win Rate</p>
           <p className="text-2xl font-semibold text-gray-800">
-            {formatNumber(result.performance.sharpeRatio)}
+            {result.backtest_results?.trading_stats?.win_rate ? 
+              formatPercentage(result.backtest_results.trading_stats.win_rate) : 'N/A'}
           </p>
         </div>
         
         <div className="bg-gray-50 p-3 rounded-md">
-          <p className="text-sm text-gray-500">Max Drawdown</p>
-          <p className="text-2xl font-semibold text-red-600">
-            {formatPercentage(result.performance.maxDrawdown)}
+          <p className="text-sm text-gray-500">Total Trades</p>
+          <p className="text-2xl font-semibold text-gray-800">
+            {result.backtest_results?.trading_stats?.total_trades || 0}
           </p>
         </div>
         
-        {result.performance.winRate && (
-          <div className="bg-gray-50 p-3 rounded-md">
-            <p className="text-sm text-gray-500">Win Rate</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {formatPercentage(result.performance.winRate)}
-            </p>
-          </div>
-        )}
+        <div className="bg-gray-50 p-3 rounded-md">
+          <p className="text-sm text-gray-500">Profitable Trades</p>
+          <p className="text-2xl font-semibold text-green-600">
+            {result.backtest_results?.trading_stats?.profitable_trades || 0}
+          </p>
+        </div>
         
-        {result.performance.trades && (
-          <div className="bg-gray-50 p-3 rounded-md">
-            <p className="text-sm text-gray-500">Trades</p>
-            <p className="text-2xl font-semibold text-gray-800">
-              {result.performance.trades}
-            </p>
-          </div>
-        )}
+        
       </div>
 
       {/* Chart */}
-      <div className="h-64 w-full">
-          <div className="h-full w-full flex items-center justify-center">
-                <p className="text-gray-500">Go to the pop-up page to view the chart</p>
-          </div>
-        {/* {plotlyData ? (
+      <div className="h-64 w-full min-h-[600px]">
+        {plotlyData ? (
           <Plot
             data={plotlyData.data}
             layout={{
               ...plotlyData.layout,
               autosize: true,
-              margin: { l: 40, r: 20, t: 20, b: 40 },
-              showlegend: true,
-              legend: {
-                orientation: 'h',
-                x: 0,
-                y: -0.2
-              },
-              paper_bgcolor: 'white',
-              plot_bgcolor: 'white',
-              xaxis: {
-                title: 'Date',
-                showgrid: false,
-              },
-              yaxis: {
-                title: 'Value ($)',
-                showgrid: true,
-                gridcolor: '#f0f0f0',
-              },
+              // Force margins to debug the right space issue
+              margin: { l: 10, r: 0, t: 80, b: 20 },
+              // showlegend: plotlyData.layout.showlegend || true,
+              // legend: plotlyData.layout.legend || {
+              //   orientation: 'h',
+              //   x: 0.01,
+              //   y: 0.95
+              // },
+              paper_bgcolor: plotlyData.layout.paper_bgcolor || 'rgb(15, 15, 15)',
+              plot_bgcolor: plotlyData.layout.plot_bgcolor || 'rgb(15, 15, 15)',
+              font: plotlyData.layout.font || { color: '#cccccc' }
             }}
             config={{
               displayModeBar: false,
@@ -142,6 +137,14 @@ const BacktestResultCard = ({ result, resultId }) => {
             style={{ width: '100%', height: '100%' }}
             onError={(err) => {
               console.error('BacktestResultCard - Plot error:', err);
+            }}
+            onInitialized={(figure, graphDiv) => {
+              console.log('Plot initialized - layout margins:', figure.layout.margin);
+              console.log('GraphDiv dimensions:', {
+                clientWidth: graphDiv.clientWidth,
+                offsetWidth: graphDiv.offsetWidth,
+                scrollWidth: graphDiv.scrollWidth
+              });
             }}
           />
         ) : result.isLiveTrade ? (
@@ -155,30 +158,41 @@ const BacktestResultCard = ({ result, resultId }) => {
           <div className="h-full w-full flex items-center justify-center">
             <p className="text-gray-500">No chart data available</p>
           </div>
-        )} */}
+        )}
       </div>
 
       {/* Signal Information */}
       {result.signals && (
         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="text-lg font-semibold mb-3">Signal Information</h3>
+          {console.log('BacktestResultCard - result.signals:', result.signals)}
           <div className="space-y-3">
             {result.signals.filter && (
               <div>
-                <p className="font-medium">Filter Signal:</p>
+                <p className="font-medium">Filter Signal: {result.signals.filter.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.filter.description}</p>
               </div>
             )}
             {result.signals.buy && (
-              <div>
-                <p className="font-medium">Buy Signal:</p>
+              <div className="border-l-4 border-green-500 pl-3">
+                <p className="font-medium text-green-700">Buy Signal: {result.signals.buy.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.buy.description}</p>
+                {result.signals.buy.operator && result.signals.buy.threshold !== undefined && (
+                  <p className="text-sm text-green-600 font-medium mt-1">
+                    Condition: {result.signals.buy.operator} {result.signals.buy.threshold}
+                  </p>
+                )}
               </div>
             )}
             {result.signals.sell && (
-              <div>
-                <p className="font-medium">Sell Signal:</p>
+              <div className="border-l-4 border-red-500 pl-3">
+                <p className="font-medium text-red-700">Sell Signal: {result.signals.sell.name}</p>
                 <p className="text-sm text-gray-600">{result.signals.sell.description}</p>
+                {result.signals.sell.operator && result.signals.sell.threshold !== undefined && (
+                  <p className="text-sm text-red-600 font-medium mt-1">
+                    Condition: {result.signals.sell.operator} {result.signals.sell.threshold}
+                  </p>
+                )}
               </div>
             )}
           </div>

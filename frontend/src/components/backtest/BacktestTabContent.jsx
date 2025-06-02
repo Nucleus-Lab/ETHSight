@@ -1,10 +1,11 @@
 import React from 'react';
 import BacktestResults from './BacktestResults';
 import StrategyList from './StrategyList';
+import BacktestHistory from './BacktestHistory';
 import { useChatContext } from '../../contexts/ChatContext';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
-const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null }) => {
+const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null, onBacktestComplete }) => {
   const { isChatOpen, setIsChatOpen } = useChatContext();
 
   console.log('BacktestTabContent - Active tab:', activeTab);
@@ -14,6 +15,7 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
   const tabs = [
     { id: 'results', label: 'Results' },
     { id: 'strategies', label: 'Strategies' },
+    { id: 'history', label: 'Backtest History' },
   ];
 
   const renderContent = () => {
@@ -24,14 +26,22 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
         return (
           <div className="h-full overflow-y-auto">
             <BacktestResults 
-              strategyIds={activeStrategies} 
-              setActiveStrategies={setActiveStrategies}
               lastResults={lastResults}
             />
           </div>
         );
       case 'strategies':
-        return <StrategyList setActiveStrategies={setActiveStrategies} />;
+        return (
+          <StrategyList 
+            onBacktestComplete={onBacktestComplete}
+          />
+        );
+      case 'history':
+        return (
+          <div className="h-full overflow-y-auto">
+            <BacktestHistory />
+          </div>
+        );
       default:
         return null;
     }
