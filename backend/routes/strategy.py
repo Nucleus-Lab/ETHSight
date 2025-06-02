@@ -412,7 +412,6 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
             "fig": backtest_result.get('plotly_figure'),
             "backtest_results": {
                 "trading_stats": backtest_result.get('trading_stats', {}),
-                "plotly_figure": backtest_result.get('plotly_figure'),
                 "data_points": backtest_result.get('data_points'),
                 "time_range": backtest_result.get('time_range')
             },
@@ -433,12 +432,6 @@ async def run_backtest(strategy: StrategyModel, db: Session = Depends(get_db)):
                     "description": sell_signal.signal_description,
                     "info": backtest_result.get('sell_indicator_info')
                 }
-            },
-            "decoupled_approach": {
-                "signal_calculation_separate": True,
-                "conditions_applied_separately": True,
-                "ai_column_detection": True,
-                "reusable_signals": True
             },
             "token_info": {
                 "name": token_name,

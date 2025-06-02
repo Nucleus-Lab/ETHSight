@@ -313,51 +313,22 @@ def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optiona
     
     print("\n=== 添加累计PnL图表 ===")
     
-    # 7.1 计算累计PnL
-    df['cumulative_pnl'] = 0.0
-    df['pnl_percentage'] = 0.0
+    # 7.1 Plot cumulative PnL curve (using pre-calculated values)
+    if 'pnl_percentage' in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df['datetime'],
+                y=df['pnl_percentage'],
+                name='Cumulative PnL (%)',
+                line=dict(color='#FFD700', width=2),  # 金色线条
+                fill='tonexty' if df['pnl_percentage'].iloc[-1] >= 0 else None,
+                fillcolor='rgba(255, 215, 0, 0.1)',
+                showlegend=False
+            ),
+            row=3, col=1
+        )
     
-    # 简化PNL计算逻辑
-    if 'buy_signal' in df.columns and 'sell_signal' in df.columns:
-        buy_signals = df[df['buy_signal'] == 1]
-        sell_signals = df[df['sell_signal'] == 1]
-        
-        if not buy_signals.empty and not sell_signals.empty:
-            print(f"计算PnL: {len(buy_signals)} 个买入信号, {len(sell_signals)} 个卖出信号")
-            
-            # 模拟交易计算累计收益
-            initial_value = 1000
-            current_value = initial_value
-            in_position = False
-            entry_price = 0
-            
-            for idx, row in df.iterrows():
-                if row['buy_signal'] == 1 and not in_position:
-                    entry_price = row['close']
-                    in_position = True
-                elif row['sell_signal'] == 1 and in_position:
-                    profit_pct = (row['close'] - entry_price) / entry_price
-                    current_value *= (1 + profit_pct)
-                    in_position = False
-                
-                df.at[idx, 'cumulative_pnl'] = current_value
-                df.at[idx, 'pnl_percentage'] = (current_value - initial_value) / initial_value * 100
-    
-    # 7.2 添加累计PnL曲线
-    fig.add_trace(
-        go.Scatter(
-            x=df['datetime'],
-            y=df['pnl_percentage'],
-            name='Cumulative PnL (%)',
-            line=dict(color='#FFD700', width=2),  # 金色线条
-            fill='tonexty' if df['pnl_percentage'].iloc[-1] >= 0 else None,
-            fillcolor='rgba(255, 215, 0, 0.1)',
-            showlegend=False
-        ),
-        row=3, col=1
-    )
-    
-    # 7.3 添加盈亏平衡线（零线）
+    # 7.2 Add zero line
     fig.add_shape(
         type="line",
         x0=df['datetime'].iloc[0],
