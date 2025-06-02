@@ -151,7 +151,7 @@ def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optiona
         legend=dict(
             orientation="h",  # 水平图例
             yanchor="top",
-            y=1.05,  # 移动到更高位置，增加与图表的距离
+            y=1.01,  # 移动到更高位置，增加与图表的距离
             xanchor="center",  # 居中对齐
             x=0.5,
             font=dict(size=9),
