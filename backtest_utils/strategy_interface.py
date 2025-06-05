@@ -292,12 +292,6 @@ def run_backtest_with_indicators(
         print(f"Found pool address: {pool_address}")
         
         # Step 2: Fetch OHLC data
-        csv_dir = 'data_csv'
-        os.makedirs(csv_dir, exist_ok=True)
-        
-        csv_filename = f"{network}_{token_symbol}_{timeframe}.csv"
-        csv_path = os.path.join(csv_dir, csv_filename)
-        
         # fetch_ohlc_data returns a file path, not a DataFrame
         data_file_path = fetch_ohlc_data(network, pool_address, timeframe, time_start, time_end)
         
