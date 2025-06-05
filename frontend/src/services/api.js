@@ -315,16 +315,36 @@ export const createSignal = async (signalData) => {
 };
 
 // Run backtest with a strategy
-export const runBacktest = async (strategy) => {
+export const runBacktest = async (request) => {
   try {
-    console.log('Sending backtest request:', strategy);
+    console.log('Sending backtest request:', request);
     
+    // Convert the strategy to match the BacktestRequest format
+    const backtestRequest = {
+      filter_signal_id: request.filter_signal_id,
+      buy_signal_id: request.buy_signal_id,
+      buy_operator: request.buy_operator,
+      buy_threshold: request.buy_threshold,
+      sell_signal_id: request.sell_signal_id,
+      sell_operator: request.sell_operator,
+      sell_threshold: request.sell_threshold,
+      position_size: request.position_size,
+      max_position_value: request.max_position_value,
+      time_range: {
+        start: request.time_range.start,
+        end: request.time_range.end
+      },
+      network: request.network,
+      timeframe: request.timeframe,
+      wallet_address: request.wallet_address
+    };
+
     const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/backtest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(strategy)
+      body: JSON.stringify(backtestRequest)
     });
 
     if (!response.ok) {
@@ -334,39 +354,16 @@ export const runBacktest = async (strategy) => {
 
     const data = await response.json();
     console.log('Backtest response received:', data);
-    console.log('Backend results structure:', data.results);
     
     return {
       strategy_id: data.strategy_id,
       success: true,
       fig: data.fig,
       backtest_results: data.backtest_results,
-      strategy: {
-        ...data.strategy,
-        network: data.strategy.network,
-        timeframe: data.strategy.timeframe
-      },
-      signals: {
-        filter: {
-          id: data.results?.filterSignal?.id,
-          name: data.results?.filterSignal?.name,
-          description: data.results?.filterSignal?.description
-        },
-        buy: {
-          id: data.results?.buySignal?.id,
-          name: data.results?.buySignal?.name,
-          description: data.results?.buySignal?.description,
-          operator: data.strategy?.buyCondition?.operator,
-          threshold: data.strategy?.buyCondition?.threshold
-        },
-        sell: {
-          id: data.results?.sellSignal?.id,
-          name: data.results?.sellSignal?.name,
-          description: data.results?.sellSignal?.description,
-          operator: data.strategy?.sellCondition?.operator,
-          threshold: data.strategy?.sellCondition?.threshold
-        }
-      }
+      strategy: data.strategy,
+      signals: data.signals,
+      token_info: data.token_info,
+      results: data.results
     };
   } catch (error) {
     console.error('Error running backtest:', error);
@@ -375,25 +372,18 @@ export const runBacktest = async (strategy) => {
 };
 
 // Execute a trade with a strategy
-export const executeTrade = async (strategy) => {
+export const executeTrade = async (strategy_id) => {
   try {
-    console.log('Executing trade with strategy:', strategy);
-    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/trade`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(strategy)
+    console.log('Executing trade with strategy ID:', strategy_id);
+    
+    // Create EventSource with the strategy_id as query parameter
+    const eventSource = new EventSource(`${BACKEND_API_BASE_URL}/strategy/trade?strategy_id=${strategy_id}`, {
+      withCredentials: true
     });
     
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to execute trade');
-    }
+    console.log('Created EventSource connection');
     
-    const data = await response.json();
-    console.log('Trade execution results:', data);
-    return data;
+    return eventSource;
   } catch (error) {
     console.error('Error executing trade:', error);
     throw error;
@@ -448,6 +438,33 @@ export const getUserBacktestHistories = async (walletAddress, limit = 50) => {
     return data.backtest_histories || [];
   } catch (error) {
     console.error('Error fetching backtest histories:', error);
+    throw error;
+  }
+};
+
+// Get a strategy by ID
+export const getStrategyById = async (strategyId) => {
+  try {
+    console.log('Fetching strategy:', strategyId);
+    
+    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/${strategyId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('Strategy data:', data);
+    
+    return data.strategy;
+  } catch (error) {
+    console.error('Error fetching strategy:', error);
     throw error;
   }
 };

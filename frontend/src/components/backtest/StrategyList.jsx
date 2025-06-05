@@ -35,7 +35,7 @@ const StrategyList = ({ onBacktestComplete }) => {
       }
     };
 
-    fetchStrategies();
+      fetchStrategies();
   }, [authenticated, user?.wallet?.address]);
 
   const handleRunBacktest = async (strategy) => {

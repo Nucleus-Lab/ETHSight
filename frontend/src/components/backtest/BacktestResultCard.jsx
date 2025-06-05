@@ -100,12 +100,12 @@ const BacktestResultCard = ({ result, resultId }) => {
           </p>
         </div>
         
-        <div className="bg-gray-50 p-3 rounded-md">
+          <div className="bg-gray-50 p-3 rounded-md">
           <p className="text-sm text-gray-500">Profitable Trades</p>
           <p className="text-2xl font-semibold text-green-600">
             {result.backtest_results?.trading_stats?.profitable_trades || 0}
-          </p>
-        </div>
+            </p>
+          </div>
         
         
       </div>
@@ -167,30 +167,30 @@ const BacktestResultCard = ({ result, resultId }) => {
           <h3 className="text-lg font-semibold mb-3">Signal Information</h3>
           {console.log('BacktestResultCard - result.signals:', result.signals)}
           <div className="space-y-3">
-            {result.signals.filter && (
+            {result.signals.filter_signal && (
               <div>
-                <p className="font-medium">Filter Signal: {result.signals.filter.name}</p>
-                <p className="text-sm text-gray-600">{result.signals.filter.description}</p>
+                <p className="font-medium">Filter Signal: {result.signals.filter_signal.signal_name}</p>
+                <p className="text-sm text-gray-600">{result.signals.filter_signal.signal_description}</p>
               </div>
             )}
-            {result.signals.buy && (
+            {result.signals.buy_signal && (
               <div className="border-l-4 border-green-500 pl-3">
-                <p className="font-medium text-green-700">Buy Signal: {result.signals.buy.name}</p>
-                <p className="text-sm text-gray-600">{result.signals.buy.description}</p>
-                {result.signals.buy.operator && result.signals.buy.threshold !== undefined && (
+                <p className="font-medium text-green-700">Buy Signal: {result.signals.buy_signal.signal_info.signal_name}</p>
+                <p className="text-sm text-gray-600">{result.signals.buy_signal.signal_info.signal_description}</p>
+                {result.signals.buy_signal.operator && result.signals.buy_signal.threshold !== undefined && (
                   <p className="text-sm text-green-600 font-medium mt-1">
-                    Condition: {result.signals.buy.operator} {result.signals.buy.threshold}
+                    Condition: {result.signals.buy_signal.operator} {result.signals.buy_signal.threshold}
                   </p>
                 )}
               </div>
             )}
-            {result.signals.sell && (
+            {result.signals.sell_signal && (
               <div className="border-l-4 border-red-500 pl-3">
-                <p className="font-medium text-red-700">Sell Signal: {result.signals.sell.name}</p>
-                <p className="text-sm text-gray-600">{result.signals.sell.description}</p>
-                {result.signals.sell.operator && result.signals.sell.threshold !== undefined && (
+                <p className="font-medium text-red-700">Sell Signal: {result.signals.sell_signal.signal_info.signal_name}</p>
+                <p className="text-sm text-gray-600">{result.signals.sell_signal.signal_info.signal_description}</p>
+                {result.signals.sell_signal.operator && result.signals.sell_signal.threshold !== undefined && (
                   <p className="text-sm text-red-600 font-medium mt-1">
-                    Condition: {result.signals.sell.operator} {result.signals.sell.threshold}
+                    Condition: {result.signals.sell_signal.operator} {result.signals.sell_signal.threshold}
                   </p>
                 )}
               </div>

@@ -21,7 +21,6 @@ const BacktestResults = ({ lastResults }) => {
         id: lastResults.strategy_id,
         name: `Strategy ${lastResults.strategy_id}`,
         description: 'Backtest strategy',
-        performance: lastResults.performance || {},
         fig: lastResults.fig,
         backtest_results: lastResults.backtest_results,
         signals: lastResults.signals,
@@ -31,14 +30,14 @@ const BacktestResults = ({ lastResults }) => {
       console.log('BacktestResults - Setting activeResult with signals:', newResult.signals);
       setActiveResult(newResult);
       setLoading(false);
-    } else {
+      } else {
       setLoading(false);
     }
   }, [lastResults]);
 
   // Set initial loading state
   useEffect(() => {
-    setLoading(false);
+        setLoading(false);
   }, [authenticated, user?.wallet?.address]);
 
   if (!authenticated) {
@@ -74,10 +73,10 @@ const BacktestResults = ({ lastResults }) => {
 
   return (
     <div className="flex flex-col w-full space-y-6 p-4 overflow-y-auto">
-      <BacktestResultCard
+          <BacktestResultCard
         result={activeResult}
         resultId={activeResult.id}
-      />
+          />
     </div>
   );
 };

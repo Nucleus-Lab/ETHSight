@@ -37,7 +37,7 @@ function BacktestTrade() {
       
       // Show appropriate notification
       // For now, all are backtests since we don't have live trading implemented yet
-      toast.success('Backtest completed successfully!');
+        toast.success('Backtest completed successfully!');
     } else {
       // Handle errors
       toast.error(result.message || 'Operation failed. Please try again.');
