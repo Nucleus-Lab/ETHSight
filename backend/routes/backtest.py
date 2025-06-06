@@ -173,6 +173,7 @@ async def run_backtest(request: BacktestRequest, db: Session = Depends(get_db)):
             
             print(f"📋 DataFrame columns: {list(df.columns)}")
             
+            # TODO: fix this (supposedly we only need timestamp)
             # Ensure datetime column exists and is properly formatted
             if 'datetime' not in df.columns:
                 if 'timestamp' in df.columns:

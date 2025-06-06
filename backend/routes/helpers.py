@@ -270,6 +270,9 @@ class TradeMonitor:
             limit=100
         )
         
+        # TODO: fix this (supposedly we only need timestamp)
+        df['datetime'] = pd.to_datetime(df['timestamp'])
+        
         if df.empty:
             raise Exception("Failed to fetch initial data")
         
@@ -379,6 +382,10 @@ class TradeMonitor:
                     limit=1
                 )
                 
+                # TODO: fix this (supposedly we only need timestamp)
+                new_data['datetime'] = pd.to_datetime(new_data['timestamp'])
+                new_data = new_data.sort_values('datetime')
+                
                 if not new_data.empty:
                     latest_datetime = new_data['datetime'].iloc[-1]
                     
@@ -389,14 +396,22 @@ class TradeMonitor:
                         self.df = self.df.sort_values('datetime').tail(100)  # Keep last 100 points
                         self.last_update = latest_datetime
                         
+                        print("[TRADE MONITOR] New data fetched. Calculating signals...")
+                        
                         # Calculate signals
                         buy_cols, sell_cols = self._calculate_signals()
+                        
+                        print("[TRADE MONITOR] Signals calculated. Checking for signals...")
                         
                         # Check for signals in new data
                         trade = self._check_signals(new_data.iloc[-1])
                         
+                        print("[TRADE MONITOR] Signals checked. Calculating trading stats...")
+                        
                         # Calculate trading stats
                         stats = calculate_trading_stats(self.df, buy_cols, sell_cols)
+                        
+                        print("[TRADE MONITOR] Trading stats calculated. Generating plot...")
                         
                         # Generate plot
                         fig = plot_backtest_results(
@@ -408,6 +423,8 @@ class TradeMonitor:
                             network=self.network,
                             pool=self.pool_address
                         )
+                        
+                        print("[TRADE MONITOR] Plot generated. Yielding updated results...")
                         
                         # Yield updated results
                         yield {
