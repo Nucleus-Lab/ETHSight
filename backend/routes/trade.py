@@ -37,13 +37,16 @@ def get_signal_info(db: Session, signal_id: int) -> SignalInfo:
         signal_description=signal.signal_description
     )
 
-@router.get("/strategy/trade", response_model=TradeResponse)
+@router.get("/strategy/trade/{strategy_id}")
 async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
     """Execute trade with the given strategy"""
     try:
+        print(f"Starting trade execution for strategy {strategy_id}")  # Add logging
+        
         # Get strategy from database
         strategy = get_strategy_by_id(db, strategy_id)
         if not strategy:
+            print(f"Strategy {strategy_id} not found")  # Add logging
             raise HTTPException(status_code=404, detail=f"Strategy with ID {strategy_id} not found")
             
         # For now, use hardcoded values - you can uncomment the line below to use the AI agent
@@ -55,9 +58,11 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
         print(f"\n🔄 Starting trade monitor for {token_symbol}")
         print(f"💰 Position size: {strategy.position_size} BNB")
         
+        # TODO:
         # For testing on BSC Testnet, we'll use CAKE pool
         # In production, this should be determined by the token_contract_address
         pool_address = "0x0ed7e52944161450477ee417de9cd3a859b14fd0"  # CAKE-BNB pool on BSC
+        network = "bsc"
         
         async def event_generator():
             """Generate SSE events for trade updates"""
@@ -65,15 +70,15 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
                 async for update in start_trade_monitor(
                     db=db,
                     strategy_id=strategy_id,
-                    network=strategy.network,
+                    network=network,
                     pool_address=pool_address,
                     buy_signal_id=strategy.buy_condition_signal_id,
                     buy_operator=strategy.buy_condition_operator,
-                    buy_threshold=strategy.buy_condition_threshold,
+                    buy_threshold=float(strategy.buy_condition_threshold),
                     sell_signal_id=strategy.sell_condition_signal_id,
                     sell_operator=strategy.sell_condition_operator,
-                    sell_threshold=strategy.sell_condition_threshold,
-                    position_size=strategy.position_size
+                    sell_threshold=float(strategy.sell_condition_threshold),
+                    position_size=float(strategy.position_size)
                 ):
                     print("update", update)
                     if update['status'] == 'error':
@@ -102,7 +107,9 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
         return EventSourceResponse(event_generator())
             
     except HTTPException as e:
+        print(f"HTTP Exception: {str(e)}")  # Add logging
         raise e
     except Exception as e:
-        print(f"Error executing trade: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to execute trade")
+        print(f"Unexpected error: {str(e)}")  # Add logging
+        print(traceback.format_exc())  # Add stack trace
+        raise HTTPException(status_code=500, detail=str(e))

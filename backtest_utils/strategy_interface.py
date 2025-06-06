@@ -6,7 +6,8 @@ Simplified interface for strategy.py to interact with backtesting system
 
 import os
 import sys
-import json
+import traceback
+from decimal import Decimal
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 import pandas as pd
@@ -56,6 +57,7 @@ def generate_indicator_code_from_prompt(prompt: str, model: str = 'gpt-4o', api_
         
     except Exception as e:
         print(f"Error generating indicator code: {str(e)}")
+        print(traceback.format_exc())
         raise Exception(f"Failed to generate indicator code: {str(e)}")
 
 
@@ -106,6 +108,7 @@ def generate_indicator_from_prompt(user_prompt: str, indicator_name: str, api_ke
             
     except Exception as e:
         print(f"Error generating indicator: {str(e)}")
+        print(traceback.format_exc())
         raise
 
 
@@ -409,8 +412,7 @@ def run_backtest_with_indicators(
         
     except Exception as e:
         print(f"Error in backtest: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(traceback.format_exc())
         raise
 
 def apply_indicator_code(df: pd.DataFrame, indicator_code: str, indicator_name: str) -> pd.DataFrame:
@@ -429,6 +431,7 @@ def apply_indicator_code(df: pd.DataFrame, indicator_code: str, indicator_name: 
         
     except Exception as e:
         print(f"Error applying indicator {indicator_name}: {e}")
+        print(traceback.format_exc())
         raise Exception(f"Failed to apply indicator {indicator_name}: {str(e)}")
 
 # Removed unused backtest_indicators_with_df function - now using backtest_indicators with use_existing_indicators=True 
@@ -466,6 +469,7 @@ def generate_signal_calculation_code_from_prompt(signal_description: str, signal
         
     except Exception as e:
         print(f"Error generating signal calculation code: {str(e)}")
+        print(traceback.format_exc())
         raise Exception(f"Failed to generate signal calculation code: {str(e)}")
 
 
@@ -542,6 +546,7 @@ def apply_signal_calculation_code(df: pd.DataFrame, signal_code: str, signal_nam
     except Exception as e:
         print(f"❌ Error applying signal calculation code for {signal_name}: {e}")
         print(f"Code that failed:\n{signal_code}")
+        print(traceback.format_exc())
         raise Exception(f"Failed to apply signal calculation code for {signal_name}: {str(e)}")
 
 
@@ -570,10 +575,15 @@ def apply_condition_to_signal(df: pd.DataFrame, signal_column: str, operator: st
         if signal_column not in df_copy.columns:
             raise ValueError(f"Signal column '{signal_column}' not found in DataFrame")
         
-        # Create the appropriate signal column (don't overwrite if exists)
+        # Create the appropriate signal column (don't overwrite if exists)  (buy_signal or sell_signal)
         signal_col_name = f"{condition_type}_signal"
         if signal_col_name not in df_copy.columns:
             df_copy[signal_col_name] = 0
+        
+        # Convert threshold to float if it's a Decimal (from database NUMERIC columns)
+        if isinstance(threshold, Decimal):
+            threshold = float(threshold)
+            print(f"Converted Decimal threshold to float: {threshold}")
         
         # Apply the condition based on operator
         if operator == '>':
@@ -602,6 +612,7 @@ def apply_condition_to_signal(df: pd.DataFrame, signal_column: str, operator: st
         
     except Exception as e:
         print(f"Error applying condition to signal: {e}")
+        print(traceback.format_exc())
         raise Exception(f"Failed to apply condition to signal: {str(e)}")
 
 
@@ -748,6 +759,7 @@ def run_backtest_with_prepared_signals(
         
     except Exception as e:
         print(f"Error running backtest: {e}")
+        print(traceback.format_exc())
         return {
             "success": False,
             "error": str(e),

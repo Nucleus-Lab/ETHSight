@@ -31,8 +31,20 @@ const LiveTradeResults = ({ onStop, strategy }) => {
     // Execute trade and get EventSource
     const setupTrading = async () => {
       try {
+        console.log('Setting up trade execution for strategy:', strategy.strategy_id);
         const eventSource = await executeTrade(strategy.strategy_id);
         eventSourceRef.current = eventSource;
+        
+        eventSource.onopen = () => {
+          console.log('SSE connection opened');
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error('SSE Error:', error);
+          console.error('ReadyState:', eventSource.readyState);
+          setError('Connection error occurred. Please check the console for details.');
+          eventSource.close();
+        };
         
         // Listen for specific event types
         eventSource.onmessage = (event) => {
@@ -64,15 +76,9 @@ const LiveTradeResults = ({ onStop, strategy }) => {
             }
           }
         };
-
-        eventSource.onerror = (error) => {
-          console.error('SSE Error:', error);
-          setError('Connection error occurred');
-          eventSource.close();
-        };
       } catch (error) {
         console.error('Error setting up trade execution:', error);
-        setError('Failed to start trading');
+        setError(`Failed to start trading: ${error.message}`);
       }
     };
 

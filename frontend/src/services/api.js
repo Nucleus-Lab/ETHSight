@@ -377,7 +377,7 @@ export const executeTrade = async (strategy_id) => {
     console.log('Executing trade with strategy ID:', strategy_id);
     
     // Create EventSource with the strategy_id as query parameter
-    const eventSource = new EventSource(`${BACKEND_API_BASE_URL}/strategy/trade?strategy_id=${strategy_id}`, {
+    const eventSource = new EventSource(`${BACKEND_API_BASE_URL}/strategy/trade/${strategy_id}`, {
       withCredentials: true
     });
     
