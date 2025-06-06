@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text, Float, Numeric
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -84,19 +84,19 @@ class StrategyDB(Base):
     # Filter signal
     filter_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
     
-    # Buy condition
+    # Buy condition - using Numeric for exact precision
     buy_condition_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
     buy_condition_operator = Column(String)
-    buy_condition_threshold = Column(String)  # Using String to handle various number formats
+    buy_condition_threshold = Column(Numeric(precision=20, scale=8))  # Supports crypto precision
     
-    # Sell condition  
+    # Sell condition - using Numeric for exact precision
     sell_condition_signal_id = Column(Integer, ForeignKey("signals.signal_id"))
     sell_condition_operator = Column(String)
-    sell_condition_threshold = Column(String)  # Using String to handle various number formats
+    sell_condition_threshold = Column(Numeric(precision=20, scale=8))  # Supports crypto precision
     
-    # Position parameters
-    position_size = Column(String)  # Using String to handle various number formats
-    max_position_value = Column(String)  # Using String to handle various number formats
+    # Position parameters - using Numeric for exact precision
+    position_size = Column(Numeric(precision=20, scale=8))  # Supports fractional positions
+    max_position_value = Column(Numeric(precision=20, scale=2))  # USD with cent precision
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -114,12 +114,12 @@ class StrategyDB(Base):
             "filter_signal_id": self.filter_signal_id,
             "buy_condition_signal_id": self.buy_condition_signal_id,
             "buy_condition_operator": self.buy_condition_operator,
-            "buy_condition_threshold": self.buy_condition_threshold,
+            "buy_condition_threshold": float(self.buy_condition_threshold) if self.buy_condition_threshold else None,
             "sell_condition_signal_id": self.sell_condition_signal_id,
             "sell_condition_operator": self.sell_condition_operator,
-            "sell_condition_threshold": self.sell_condition_threshold,
-            "position_size": self.position_size,
-            "max_position_value": self.max_position_value,
+            "sell_condition_threshold": float(self.sell_condition_threshold) if self.sell_condition_threshold else None,
+            "position_size": float(self.position_size) if self.position_size else None,
+            "max_position_value": float(self.max_position_value) if self.max_position_value else None,
             "created_at": self.created_at
         }
 
@@ -134,10 +134,10 @@ class BacktestHistoryDB(Base):
     time_start = Column(DateTime)
     time_end = Column(DateTime)
     
-    # Trading statistics
-    total_return = Column(Float)
-    avg_return = Column(Float)
-    win_rate = Column(Float)
+    # Trading statistics - using Numeric for exact precision in financial calculations
+    total_return = Column(Numeric(precision=15, scale=8))  # Percentage with high precision
+    avg_return = Column(Numeric(precision=15, scale=8))    # Percentage with high precision
+    win_rate = Column(Numeric(precision=6, scale=4))       # Percentage (0.0000 to 100.0000)
     total_trades = Column(Integer)
     profitable_trades = Column(Integer)
     
@@ -163,9 +163,9 @@ class BacktestHistoryDB(Base):
             "strategy_id": self.strategy_id,
             "time_start": self.time_start,
             "time_end": self.time_end,
-            "total_return": self.total_return,
-            "avg_return": self.avg_return,
-            "win_rate": self.win_rate,
+            "total_return": float(self.total_return) if self.total_return else None,
+            "avg_return": float(self.avg_return) if self.avg_return else None,
+            "win_rate": float(self.win_rate) if self.win_rate else None,
             "total_trades": self.total_trades,
             "profitable_trades": self.profitable_trades,
             "data_points": self.data_points,
