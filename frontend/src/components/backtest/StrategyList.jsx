@@ -100,7 +100,7 @@ const StrategyList = ({ onBacktestComplete }) => {
   const formatCondition = (condition) => {
     if (!condition) return 'N/A';
     
-    if (condition.operator && condition.threshold) {
+    if (condition.operator && condition.threshold != null) {
       return `${condition.signal_name} ${condition.operator} ${condition.threshold}`;
     }
     
