@@ -390,6 +390,33 @@ export const executeTrade = async (strategy_id) => {
   }
 };
 
+// Stop trading for a strategy
+export const stopTrade = async (strategy_id) => {
+  try {
+    console.log('Stopping trade for strategy ID:', strategy_id);
+    
+    const response = await fetch(`${BACKEND_API_BASE_URL}/strategy/trade/${strategy_id}/stop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('Stop trade response:', data);
+    
+    return data;
+  } catch (error) {
+    console.error('Error stopping trade:', error);
+    throw error;
+  }
+};
+
 export const getUserStrategies = async (walletAddress) => {
   try {
     console.log('Fetching strategies for wallet:', walletAddress);

@@ -11,7 +11,8 @@ import { toast } from 'react-hot-toast';
 function BacktestTrade() {
   const [activeTab, setActiveTab] = useState('results')
   const [activeStrategies, setActiveStrategies] = useState([])
-  const [lastResults, setLastResults] = useState(null) 
+  const [lastResults, setLastResults] = useState(null)
+  const [liveTradeData, setLiveTradeData] = useState(null) 
   
   // Log state changes for debugging
   useEffect(() => {
@@ -36,12 +37,39 @@ function BacktestTrade() {
       setActiveTab('results');
       
       // Show appropriate notification
-      // For now, all are backtests since we don't have live trading implemented yet
-        toast.success('Backtest completed successfully!');
+      toast.success('Backtest completed successfully!');
     } else {
       // Handle errors
       toast.error(result.message || 'Operation failed. Please try again.');
     }
+  };
+
+  const handleLiveTradeStart = (strategy) => {
+    console.log('Live trade started with strategy:', strategy);
+    
+    // Clear backtest results when starting live trade
+    setLastResults(null);
+    
+    // Set live trade data
+    setLiveTradeData(strategy);
+    
+    // Auto-switch to results tab to show live trading
+    setActiveTab('results');
+    
+    // Show notification
+    toast.success('Live trading started!');
+  };
+
+  const handleLiveTradeStop = () => {
+    console.log('handleLiveTradeStop called in BacktestTrade.jsx');
+    
+    // Clear live trade data
+    setLiveTradeData(null);
+    
+    // Show notification
+    toast.success('Live trading stopped!');
+    
+    console.log('Live trade data cleared, notification shown');
   };
 
   return (
@@ -67,7 +95,11 @@ function BacktestTrade() {
                 {/* Left Side - Strategy Form */}
                 <div className="w-[400px] min-w-[400px] border-r overflow-y-auto bg-gray-50">
                   <div className="p-4">
-                    <StrategyForm onSubmit={handleStrategySubmit} />
+                    <StrategyForm 
+                      onSubmit={handleStrategySubmit} 
+                      onLiveTradeStart={handleLiveTradeStart}
+                      onLiveTradeStop={handleLiveTradeStop}
+                    />
                   </div>
                 </div>
                 
@@ -80,6 +112,8 @@ function BacktestTrade() {
                     setActiveStrategies={setActiveStrategies}
                     lastResults={lastResults}
                     onBacktestComplete={handleStrategySubmit}
+                    liveTradeData={liveTradeData}
+                    onStopLiveTrade={handleLiveTradeStop}
                   />
                 </div>
               </div>

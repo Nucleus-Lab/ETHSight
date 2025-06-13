@@ -492,9 +492,7 @@ def apply_signal_calculation_code(df: pd.DataFrame, signal_code: str, signal_nam
         print(f"Applying signal calculation code for: {signal_name}")
         print(f"Input DataFrame columns: {list(df.columns)}")
         print(f"DataFrame shape: {df.shape}")
-        
-        print("Executing signal calculation code:\n", signal_code)
-        
+
         # Execute the signal calculation code
         exec(signal_code, globals(), local_vars)
         

@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
+import traceback
 
 
 class GeckoTerminalAPI:
@@ -114,6 +115,7 @@ class GeckoTerminalAPI:
             
         except requests.exceptions.RequestException as e:
             print(f"Error fetching OHLC data: {e}")
+            print(traceback.format_exc())
             return pd.DataFrame()
     
     def get_pool_info(self, network, pool_address):

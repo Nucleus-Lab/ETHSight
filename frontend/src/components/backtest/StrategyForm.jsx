@@ -4,7 +4,6 @@ import DatePicker from 'react-datepicker';
 import { Switch } from '@headlessui/react';
 import 'react-datepicker/dist/react-datepicker.css';
 import { getAllSignalsForUser, runBacktest, executeTrade, getUserStrategies, getStrategyById } from '../../services/api';
-import LiveTradeResults from './LiveTradeResults';
 
 // Add these constants at the top of the file after imports
 const NETWORKS = [
@@ -21,7 +20,7 @@ const TIMEFRAMES = [
   { value: '1d', label: '1 Day' }
 ];
 
-const StrategyForm = ({ onSubmit }) => {
+const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
   const { authenticated, user } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [signals, setSignals] = useState([]);
@@ -184,12 +183,18 @@ const StrategyForm = ({ onSubmit }) => {
         }
         
         // Store strategy ID and start live trading
-        setCurrentStrategy({
+        const strategy = {
           strategy_id: selectedStrategyId,
           network,
           timeframe
-        });
+        };
+        setCurrentStrategy(strategy);
         setIsLiveTrading(true);
+        
+        // Notify parent component about live trading start
+        if (onLiveTradeStart) {
+          onLiveTradeStart(strategy);
+        }
       } else {
         // Backtest logic with updated format
         const strategy = {
@@ -227,6 +232,11 @@ const StrategyForm = ({ onSubmit }) => {
     setIsLiveTrading(false);
     setIsTradeMode(false);
     setCurrentStrategy(null);
+    
+    // Notify parent component about live trading stop
+    if (onLiveTradeStop) {
+      onLiveTradeStop();
+    }
   };
   
   // Add function to fetch strategies
@@ -253,14 +263,7 @@ const StrategyForm = ({ onSubmit }) => {
   
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-      {isLiveTrading && currentStrategy ? (
-        <LiveTradeResults 
-          onStop={handleStopTrading} 
-          strategy={currentStrategy} 
-        />
-      ) : (
-        <>
-          {/* Mode Toggle */}
+      {/* Mode Toggle */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-800">
               {isTradeMode ? "Execute Trade" : "Backtest"}
@@ -646,8 +649,6 @@ const StrategyForm = ({ onSubmit }) => {
               Please connect your wallet to create and run backtests.
             </div>
           )}
-        </>
-      )}
     </div>
   );
 };

@@ -393,44 +393,44 @@ def calculate_trading_stats(df, buy_signal_columns, sell_signal_columns):
         
     return stats
 
-def calculate_macd(df, fast_period=12, slow_period=26, signal_period=9):
-    """
-    Calculate MACD指标
+# def calculate_macd(df, fast_period=12, slow_period=26, signal_period=9):
+#     """
+#     Calculate MACD指标
     
-    Args:
-        df: DataFrame with OHLC data
-        fast_period: Fast EMA period (default 12)
-        slow_period: Slow EMA period (default 26)
-        signal_period: Signal EMA period (default 9)
+#     Args:
+#         df: DataFrame with OHLC data
+#         fast_period: Fast EMA period (default 12)
+#         slow_period: Slow EMA period (default 26)
+#         signal_period: Signal EMA period (default 9)
         
-    Returns:
-        df: DataFrame with MACD columns
-    """
-    # 🎯 计算MACD指标
-    print(f"[DEBUG] 开始计算MACD指标...")
+#     Returns:
+#         df: DataFrame with MACD columns
+#     """
+#     # 🎯 计算MACD指标
+#     print(f"[DEBUG] 开始计算MACD指标...")
     
-    if 'close' in df.columns and len(df) >= 26:  # 确保有足够的数据计算MACD
-        # 计算EMA12和EMA26
-        ema12 = df['close'].ewm(span=12, adjust=False).mean()
-        ema26 = df['close'].ewm(span=26, adjust=False).mean()
+#     if 'close' in df.columns and len(df) >= 26:  # 确保有足够的数据计算MACD
+#         # 计算EMA12和EMA26
+#         ema12 = df['close'].ewm(span=12, adjust=False).mean()
+#         ema26 = df['close'].ewm(span=26, adjust=False).mean()
          
-        # 计算MACD线 (DIF)
-        df['macd'] = ema12 - ema26
+#         # 计算MACD线 (DIF)
+#         df['macd'] = ema12 - ema26
         
-        # 计算信号线 (DEA) - MACD的9日EMA
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+#         # 计算信号线 (DEA) - MACD的9日EMA
+#         df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
         
-        # 计算MACD柱状图 (MACD Histogram)
-        df['macd_histogram'] = df['macd'] - df['macd_signal']
+#         # 计算MACD柱状图 (MACD Histogram)
+#         df['macd_histogram'] = df['macd'] - df['macd_signal']
         
-        print(f"✅ MACD指标计算完成:")
-        print(f"   - MACD范围: {df['macd'].min():.6f} 到 {df['macd'].max():.6f}")
-        print(f"   - Signal范围: {df['macd_signal'].min():.6f} 到 {df['macd_signal'].max():.6f}")
-        print(f"   - Histogram范围: {df['macd_histogram'].min():.6f} 到 {df['macd_histogram'].max():.6f}")
-    else:
-        print(f"⚠️ 数据不足，无法计算MACD指标 (需要至少26个数据点，当前: {len(df)})")
+#         print(f"✅ MACD指标计算完成:")
+#         print(f"   - MACD范围: {df['macd'].min():.6f} 到 {df['macd'].max():.6f}")
+#         print(f"   - Signal范围: {df['macd_signal'].min():.6f} 到 {df['macd_signal'].max():.6f}")
+#         print(f"   - Histogram范围: {df['macd_histogram'].min():.6f} 到 {df['macd_histogram'].max():.6f}")
+#     else:
+#         print(f"⚠️ 数据不足，无法计算MACD指标 (需要至少26个数据点，当前: {len(df)})")
     
-    return df
+#     return df
 
 def plot_backtest_results(df, buy_indicator_info, sell_indicator_info, buy_signal_columns, sell_signal_columns, 
                          title=None, save_path=None, save_json=None, network=None, pool=None,

@@ -4,15 +4,32 @@ import { usePrivy } from '@privy-io/react-auth';
 import WelcomeAnimation from '../common/WelcomeAnimation';
 import BacktestResultCard from './BacktestResultCard';
 
-const BacktestResults = ({ lastResults }) => {
+const BacktestResults = ({ lastResults, liveTradeData, onStopLiveTrade }) => {
   const { authenticated, user } = usePrivy();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeResult, setActiveResult] = useState(null);
 
-  // Process last results when they're updated - only keep the most recent one
+  // Process live trade data or last results when they're updated
   useEffect(() => {
-    if (lastResults && lastResults.success) {
+    if (liveTradeData) {
+      console.log('BacktestResults - Processing liveTradeData:', liveTradeData);
+      
+      const liveTradeResult = {
+        id: `live-${liveTradeData.strategy_id}`,
+        name: `Live Trade - Strategy ${liveTradeData.strategy_id}`,
+        description: 'Live trading strategy',
+        fig: null, // Will be updated via SSE
+        backtest_results: null, // Will be updated via SSE
+        signals: null, // Will be updated via SSE
+        isLiveTrade: true,
+        strategy: liveTradeData
+      };
+      
+      console.log('BacktestResults - Setting activeResult for live trade:', liveTradeResult);
+      setActiveResult(liveTradeResult);
+      setLoading(false);
+    } else if (lastResults && lastResults.success) {
       console.log('BacktestResults - Processing lastResults:', lastResults);
       console.log('BacktestResults - backtest_results in lastResults:', lastResults.backtest_results);
       console.log('BacktestResults - signals in lastResults:', lastResults.signals);
@@ -30,10 +47,10 @@ const BacktestResults = ({ lastResults }) => {
       console.log('BacktestResults - Setting activeResult with signals:', newResult.signals);
       setActiveResult(newResult);
       setLoading(false);
-      } else {
+    } else {
       setLoading(false);
     }
-  }, [lastResults]);
+  }, [lastResults, liveTradeData]);
 
   // Set initial loading state
   useEffect(() => {
@@ -64,19 +81,29 @@ const BacktestResults = ({ lastResults }) => {
     return (
       <div className="h-full flex items-center justify-center text-gray-500">
         <div className="text-center">
-          <p className="text-lg mb-2">No backtest results available</p>
-          <p className="text-sm">Create a strategy and run a backtest to see results here.</p>
+          <p className="text-lg mb-2">No results available</p>
+          <p className="text-sm">Create a strategy and run a backtest or start live trading to see results here.</p>
         </div>
       </div>
     );
   }
 
+  const handleStopLiveTrade = () => {
+    console.log('handleStopLiveTrade called in BacktestResults.jsx');
+    if (onStopLiveTrade) {
+      onStopLiveTrade();
+    } else {
+      console.error('No onStopLiveTrade callback in BacktestResults!');
+    }
+  };
+
   return (
     <div className="flex flex-col w-full space-y-6 p-4 overflow-y-auto">
-          <BacktestResultCard
+      <BacktestResultCard
         result={activeResult}
         resultId={activeResult.id}
-          />
+        onStopLiveTrade={handleStopLiveTrade}
+      />
     </div>
   );
 };

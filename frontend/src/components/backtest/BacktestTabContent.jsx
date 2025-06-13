@@ -5,7 +5,7 @@ import BacktestHistory from './BacktestHistory';
 import { useChatContext } from '../../contexts/ChatContext';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 
-const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null, onBacktestComplete }) => {
+const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActiveStrategies, lastResults = null, onBacktestComplete, liveTradeData, onStopLiveTrade }) => {
   const { isChatOpen, setIsChatOpen } = useChatContext();
 
   console.log('BacktestTabContent - Active tab:', activeTab);
@@ -23,10 +23,21 @@ const BacktestTabContent = ({ activeTab, setActiveTab, activeStrategies, setActi
     switch (activeTab) {
       case 'results':
         console.log('BacktestTabContent - Rendering Results with strategies:', activeStrategies);
+        const handleStopLiveTrade = () => {
+          console.log('handleStopLiveTrade called in BacktestTabContent.jsx');
+          if (onStopLiveTrade) {
+            onStopLiveTrade();
+          } else {
+            console.error('No onStopLiveTrade callback in BacktestTabContent!');
+          }
+        };
+
         return (
           <div className="h-full overflow-y-auto">
             <BacktestResults 
               lastResults={lastResults}
+              liveTradeData={liveTradeData}
+              onStopLiveTrade={handleStopLiveTrade}
             />
           </div>
         );

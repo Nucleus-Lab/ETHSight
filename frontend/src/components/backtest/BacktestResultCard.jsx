@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import Plot from 'react-plotly.js';
+import LiveTradeResults from './LiveTradeResults';
 
-const BacktestResultCard = ({ result, resultId }) => {
+const BacktestResultCard = ({ result, resultId, onStopLiveTrade }) => {
   console.log('Rendering BacktestResultCard for result:', resultId);
 
   if (!result) {
@@ -49,6 +50,30 @@ const BacktestResultCard = ({ result, resultId }) => {
   const badgeClass = result.isLiveTrade
     ? "bg-red-100 text-red-800"
     : "bg-blue-100 text-blue-800";
+
+  // If this is a live trade, render the LiveTradeResults component instead
+  if (result.isLiveTrade && result.strategy) {
+    return (
+      <div className={`bg-white p-6 rounded-lg shadow-md border ${cardBorderClass}`}>
+        {/* Header */}
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">{result.name}</h2>
+            <p className="text-gray-600">{result.description}</p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${badgeClass}`}>
+            {badgeText}
+          </span>
+        </div>
+        
+        {/* Live Trade Results */}
+        <LiveTradeResults 
+          onStop={onStopLiveTrade} 
+          strategy={result.strategy} 
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`bg-white p-6 rounded-lg shadow-md border ${cardBorderClass}`}>
@@ -207,11 +232,6 @@ const BacktestResultCard = ({ result, resultId }) => {
         {!result.isLiveTrade && (
           <button className="px-4 py-2 bg-primary-main text-black rounded hover:bg-primary-hover transition-colors">
             Deploy Strategy
-          </button>
-        )}
-        {result.isLiveTrade && (
-          <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
-            Stop Trading
           </button>
         )}
       </div>
