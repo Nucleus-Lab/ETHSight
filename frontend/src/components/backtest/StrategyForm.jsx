@@ -3,7 +3,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import DatePicker from 'react-datepicker';
 import { Switch } from '@headlessui/react';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getAllSignalsForUser, runBacktest, executeTrade, getUserStrategies, getStrategyById } from '../../services/api';
+import { getAllSignalsForUser, runBacktest, getUserStrategies, getStrategyById } from '../../services/api';
 
 // Add these constants at the top of the file after imports
 const NETWORKS = [

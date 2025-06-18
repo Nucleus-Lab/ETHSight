@@ -8,3 +8,6 @@ python-dotenv
 simplejson
 matplotlib
 alembic
+sse-starlette
+pandas
+aiohttp

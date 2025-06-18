@@ -243,7 +243,9 @@ class TradeMonitor:
         self.df = pd.DataFrame()
         self.last_update = None
         self.is_monitoring = False
-        self._force_stop = False  # Emergency stop flag
+        
+        # Add instance tracking for debugging
+        print(f"🏗️ [TRADEMONITOR] NEW INSTANCE created for strategy {strategy_id}. Instance ID: {id(self)}", flush=True)
         
         # Get signal calculation code
         self.buy_signal_code = get_signal_calculation_code(db, buy_signal_id)
@@ -301,7 +303,7 @@ class TradeMonitor:
         sort_end = time.time()
         print(f"⏱️ [TIMING] Data sorting: {sort_end - sort_start:.3f} seconds", flush=True)
                 
-        print(f"✅ Done initializing dataframe for strategy {self.strategy_id}")
+        print("✅ Done initializing dataframe")
         
         # Calculate initial signals for plotting context (but no trading signals yet)
         yield {
@@ -502,6 +504,7 @@ class TradeMonitor:
         Yields updated plot and trading stats
         """
         self.is_monitoring = True
+        print(f"🔄 [TRADEMONITOR] monitor_and_trade started: is_monitoring set to True for strategy {self.strategy_id}, Instance ID: {id(self)}", flush=True)
         
         # Yield initialization status
         yield {
@@ -514,10 +517,6 @@ class TradeMonitor:
         init_start_time = time.time()
         try:
             async for progress_update in self.initialize_dataframe_async():
-                # Check for stop signal during initialization
-                if not self.is_monitoring or self._force_stop:
-                    print(f"🛑 Monitor stopped during initialization for strategy {self.strategy_id}", flush=True)
-                    return
                 yield progress_update
         except Exception as e:
             print(f"Error during initialization: {str(e)}")
@@ -530,11 +529,6 @@ class TradeMonitor:
         init_end_time = time.time()
         print(f"⏱️ [TIMING] INITIALIZATION took: {init_end_time - init_start_time:.3f} seconds", flush=True)
         
-        # Final stop check after initialization
-        if not self.is_monitoring or self._force_stop:
-            print(f"🛑 Monitor stopped after initialization for strategy {self.strategy_id}", flush=True)
-            return
-        
         # Yield ready status
         yield {
             'status': 'ready',
@@ -546,21 +540,11 @@ class TradeMonitor:
         print("[TRADE MONITOR] Generating initial plot with existing data...", flush=True)
         initial_results_start_time = time.time()
         try:
-            # Check for stop before processing initial results
-            if not self.is_monitoring or self._force_stop:
-                print(f"🛑 Monitor stopped before initial results for strategy {self.strategy_id}", flush=True)
-                return
-                
             # Use data we already have from initialization
             initial_stats_start = time.time()
             initial_stats = calculate_trading_stats(self.df, [], [])
             initial_stats_end = time.time()
             print(f"⏱️ [TIMING] Initial stats calculation: {initial_stats_end - initial_stats_start:.3f} seconds", flush=True)
-            
-            # Check for stop after stats calculation
-            if not self.is_monitoring or self._force_stop:
-                print(f"🛑 Monitor stopped during initial stats calculation for strategy {self.strategy_id}", flush=True)
-                return
             
             initial_plot_start = time.time()
             initial_fig = plot_backtest_results(
@@ -574,11 +558,6 @@ class TradeMonitor:
             )
             initial_plot_end = time.time()
             print(f"⏱️ [TIMING] Initial plot generation: {initial_plot_end - initial_plot_start:.3f} seconds", flush=True)
-            
-            # Check for stop after plot generation
-            if not self.is_monitoring or self._force_stop:
-                print(f"🛑 Monitor stopped during initial plot generation for strategy {self.strategy_id}", flush=True)
-                return
             
             # Yield initial results immediately
             yield {
@@ -600,15 +579,10 @@ class TradeMonitor:
             traceback.print_exc()
             # Continue anyway
         
-        while self.is_monitoring and not self._force_stop:
+        while self.is_monitoring:
             loop_start_time = time.time()
-            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, _force_stop: {self._force_stop}, monitor ID: {id(self)}", flush=True)
+            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, monitor ID: {id(self)}", flush=True)
             
-            # Double-check monitoring status at start of each loop
-            if not self.is_monitoring or self._force_stop:
-                print(f"🛑 Monitor stop signal detected for strategy {self.strategy_id} (is_monitoring: {self.is_monitoring}, _force_stop: {self._force_stop})", flush=True)
-                break
-                
             try:
                 # Fetch latest data
                 fetch_start_time = time.time()
@@ -621,11 +595,6 @@ class TradeMonitor:
                 )
                 
                 print(f"🔥 New data: {new_data}")
-                
-                # Check for stop after data fetch
-                if not self.is_monitoring or self._force_stop:
-                    print(f"🛑 Monitor stopped after data fetch for strategy {self.strategy_id}", flush=True)
-                    break
                 
                 # TODO: fix this (supposedly we only need timestamp)
                 new_data['datetime'] = pd.to_datetime(new_data['timestamp'], unit='s')
@@ -660,11 +629,6 @@ class TradeMonitor:
                         
                         print("[TRADE MONITOR] New data fetched. Processing update...", flush=True)
                         
-                        # Check for stop before processing update
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped before processing update for strategy {self.strategy_id}", flush=True)
-                            break
-                        
                         # Yield status update before heavy computation
                         yield {
                             'status': 'processing',
@@ -675,12 +639,6 @@ class TradeMonitor:
                         
                         # Calculate signals (HEAVY OPERATION)
                         print("[TRADE MONITOR] Calculating signals...", flush=True)
-                        
-                        # Check for stop before signals calculation
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped before signals calculation for strategy {self.strategy_id}", flush=True)
-                            break
-                        
                         yield {
                             'status': 'processing',
                             'message': 'Calculating trading signals...',
@@ -692,22 +650,12 @@ class TradeMonitor:
                         signals_end_time = time.time()
                         print(f"⏱️ [TIMING] Signal calculation: {signals_end_time - signals_start_time:.3f} seconds", flush=True)
                         
-                        # Check for stop after signals calculation
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped after signals calculation for strategy {self.strategy_id}", flush=True)
-                            break
-                        
                         print("[TRADE MONITOR] Signals calculated. Checking for signals...", flush=True)
                         # Check for signals in new data
                         check_signals_start = time.time()
                         trade = self._check_signals(self.df.iloc[-1])
                         check_signals_end = time.time()
                         print(f"⏱️ [TIMING] Signal checking: {check_signals_end - check_signals_start:.3f} seconds", flush=True)
-                        
-                        # Check for stop after signal checking
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped after signal checking for strategy {self.strategy_id}", flush=True)
-                            break
                         
                         print("[TRADE MONITOR] Signals checked. Calculating trading stats...", flush=True)
                         yield {
@@ -721,11 +669,6 @@ class TradeMonitor:
                         stats = calculate_trading_stats(self.df, buy_cols, sell_cols)
                         stats_end_time = time.time()
                         print(f"⏱️ [TIMING] Trading stats calculation: {stats_end_time - stats_start_time:.3f} seconds", flush=True)
-                        
-                        # Check for stop after stats calculation
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped after stats calculation for strategy {self.strategy_id}", flush=True)
-                            break
                         
                         print("[TRADE MONITOR] Trading stats calculated. Generating plot...", flush=True)
                         yield {
@@ -747,11 +690,6 @@ class TradeMonitor:
                         )
                         plot_end_time = time.time()
                         print(f"⏱️ [TIMING] Plot generation: {plot_end_time - plot_start_time:.3f} seconds", flush=True)
-                        
-                        # Check for stop after plot generation
-                        if not self.is_monitoring or self._force_stop:
-                            print(f"🛑 Monitor stopped after plot generation for strategy {self.strategy_id}", flush=True)
-                            break
                         
                         print("[TRADE MONITOR] Plot generated. Yielding updated results...", flush=True)
                         
@@ -775,16 +713,16 @@ class TradeMonitor:
                               f"Stats: {stats_end_time - stats_start_time:.3f}s, " +
                               f"Plot: {plot_end_time - plot_start_time:.3f}s", flush=True)
                 
-                # Wait for 5 seconds before next update (with interruption check)
+                # Wait for 5 seconds before next update
                 sleep_start = time.time()
-                for i in range(50):  # Check every 0.1 seconds for stop signal
-                    print(f"💤 [SLEEP CHECK] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, _force_stop: {self._force_stop}, sleep step: {i}", flush=True)
-                    if not self.is_monitoring or self._force_stop:
-                        print(f"🛑 Monitor stopped during sleep for strategy {self.strategy_id} (is_monitoring: {self.is_monitoring}, _force_stop: {self._force_stop})", flush=True)
-                        return
-                    await asyncio.sleep(0.1)
+                await asyncio.sleep(5)
                 sleep_end = time.time()
                 print(f"😴 [SLEEP DONE] Strategy {self.strategy_id} completed 5s sleep", flush=True)
+                
+                # Check if monitoring was stopped during sleep
+                if not self.is_monitoring:
+                    print(f"🛑 [SLEEP CHECK] Strategy {self.strategy_id} monitoring was stopped during sleep, breaking loop", flush=True)
+                    break
                 
                 loop_end_time = time.time()
                 total_loop_time = loop_end_time - loop_start_time
@@ -839,15 +777,12 @@ class TradeMonitor:
                 'current_position': self.current_position,
                 'total_pnl': self.total_pnl
             }
-    
+
     def stop(self):
         """Stop the monitoring"""
-        print(f"🛑 STOP called for strategy {self.strategy_id}. Current is_monitoring: {self.is_monitoring}", flush=True)
-        print(f"🛑 Monitor object ID: {id(self)}", flush=True)
+        print(f"🛑 [TRADEMONITOR] STOP called for strategy {self.strategy_id}, Instance ID: {id(self)}. Current is_monitoring: {self.is_monitoring}", flush=True)
         self.is_monitoring = False
-        self._force_stop = True  # Set emergency stop
-        print(f"🛑 is_monitoring set to False and _force_stop set to True for strategy {self.strategy_id}. New values: is_monitoring={self.is_monitoring}, _force_stop={self._force_stop}", flush=True)
-        print(f"🛑 After setting, monitor object ID: {id(self)}", flush=True)
+        print(f"🛑 [TRADEMONITOR] is_monitoring set to False for strategy {self.strategy_id}, Instance ID: {id(self)}", flush=True)
 
 # async def start_trade_monitor(
 #     db: Session,

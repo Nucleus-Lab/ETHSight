@@ -16,13 +16,17 @@ const LiveTradeResults = ({ onStop, strategy }) => {
   const [isStopped, setIsStopped] = useState(false);
   const isStoppingManuallyRef = useRef(false);
   const eventSourceRef = useRef(null);
+  const isConnectingRef = useRef(false); // Prevent multiple connection attempts
+  const currentStrategyIdRef = useRef(null); // Track current strategy ID
 
   useEffect(() => {
     // Clean up function declaration
     const cleanup = () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
+      isConnectingRef.current = false;
     };
 
     // Validate strategy
@@ -31,14 +35,39 @@ const LiveTradeResults = ({ onStop, strategy }) => {
       return cleanup;
     }
 
+    // Check if strategy ID has actually changed
+    if (currentStrategyIdRef.current === strategy.strategy_id) {
+      console.log('🔍 Strategy ID unchanged, skipping connection setup');
+      return cleanup;
+    }
+
+    // Prevent multiple connection attempts
+    if (isConnectingRef.current || eventSourceRef.current) {
+      console.log('🚫 Connection already in progress or exists, skipping...');
+      return cleanup;
+    }
+
     console.log('Starting trade execution with strategy ID:', strategy.strategy_id);
+    
+    // Update current strategy ID reference
+    currentStrategyIdRef.current = strategy.strategy_id;
     
     // Execute trade and get EventSource
     const setupTrading = async () => {
       try {
+        isConnectingRef.current = true;
         console.log('Setting up trade execution for strategy:', strategy.strategy_id);
+        
+        // Double-check no existing connection
+        if (eventSourceRef.current) {
+          console.log('🚫 EventSource already exists, closing old one first');
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        
         const eventSource = await executeTrade(strategy.strategy_id);
         eventSourceRef.current = eventSource;
+        isConnectingRef.current = false;
         
         eventSource.onopen = () => {
           console.log('SSE connection opened');
@@ -59,6 +88,8 @@ const LiveTradeResults = ({ onStop, strategy }) => {
             setError('Connection error occurred. Please check the console for details.');
           }
           eventSource.close();
+          eventSourceRef.current = null;
+          isConnectingRef.current = false;
         };
         
         // Listen for specific event types
@@ -156,12 +187,17 @@ const LiveTradeResults = ({ onStop, strategy }) => {
       } catch (error) {
         console.error('Error setting up trade execution:', error);
         setError(`Failed to start trading: ${error.message}`);
+        isConnectingRef.current = false;
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
       }
     };
 
     setupTrading();
     return cleanup;
-  }, [strategy]);
+  }, [strategy?.strategy_id]); // Keep the same dependency but add ID tracking
 
   const handleStop = async () => {
     console.log('Stop button clicked');
