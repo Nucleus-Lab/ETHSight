@@ -245,7 +245,7 @@ class TradeMonitor:
         self.is_monitoring = False
         
         # Add instance tracking for debugging
-        print(f"🏗️ [TRADEMONITOR] NEW INSTANCE created for strategy {strategy_id}. Instance ID: {id(self)}", flush=True)
+        print(f"🏗️ [TRADEMONITOR] NEW INSTANCE created for strategy {strategy_id}. Instance ID: {id(self)}")
         
         # Get signal calculation code
         self.buy_signal_code = get_signal_calculation_code(db, buy_signal_id)
@@ -280,7 +280,7 @@ class TradeMonitor:
             limit=100
         )
         fetch_end = time.time()
-        print(f"⏱️ [TIMING] Initial data fetch: {fetch_end - fetch_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Initial data fetch: {fetch_end - fetch_start:.3f} seconds")
         
         # Step 2: Process timestamps
         yield {
@@ -292,7 +292,7 @@ class TradeMonitor:
         timestamp_start = time.time()
         df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
         timestamp_end = time.time()
-        print(f"⏱️ [TIMING] Timestamp processing: {timestamp_end - timestamp_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Timestamp processing: {timestamp_end - timestamp_start:.3f} seconds")
         
         if df.empty:
             raise Exception("Failed to fetch initial data")
@@ -301,7 +301,7 @@ class TradeMonitor:
         self.df = df.sort_values('datetime')
         self.last_update = self.df['datetime'].max()
         sort_end = time.time()
-        print(f"⏱️ [TIMING] Data sorting: {sort_end - sort_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Data sorting: {sort_end - sort_start:.3f} seconds")
                 
         print("✅ Done initializing dataframe")
         
@@ -315,7 +315,7 @@ class TradeMonitor:
         initial_signals_start = time.time()
         self._calculate_initial_indicators()
         initial_signals_end = time.time()
-        print(f"⏱️ [TIMING] Initial indicators calculation: {initial_signals_end - initial_signals_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Initial indicators calculation: {initial_signals_end - initial_signals_start:.3f} seconds")
         
         yield {
             'status': 'initializing',
@@ -389,7 +389,7 @@ class TradeMonitor:
             self.df.loc[latest_idx, sell_signal_column] = latest_row_df[sell_signal_column].iloc[-1]
             
         signals_calc_end = time.time()
-        print(f"⏱️ [TIMING] Indicator calculation (latest row): {signals_calc_end - signals_calc_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Indicator calculation (latest row): {signals_calc_end - signals_calc_start:.3f} seconds")
         
         # Apply conditions to generate actual buy/sell signals ONLY for the latest data
         # (since we can only trade on new data, not historical data)
@@ -421,7 +421,7 @@ class TradeMonitor:
             self.df.loc[latest_idx, 'buy_signal'] = buy_signal_value
             
         buy_condition_end = time.time()
-        print(f"⏱️ [TIMING] Buy condition (latest row only): {buy_condition_end - buy_condition_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Buy condition (latest row only): {buy_condition_end - buy_condition_start:.3f} seconds")
         
         sell_condition_start = time.time()
         
@@ -447,11 +447,11 @@ class TradeMonitor:
             self.df.loc[latest_idx, 'sell_signal'] = sell_signal_value
             
         sell_condition_end = time.time()
-        print(f"⏱️ [TIMING] Sell condition (latest row only): {sell_condition_end - sell_condition_start:.3f} seconds", flush=True)
+        print(f"⏱️ [TIMING] Sell condition (latest row only): {sell_condition_end - sell_condition_start:.3f} seconds")
         
         total_signals_time = sell_condition_end - signals_calc_start
-        print(f"⏱️ [TIMING] 📊 TOTAL SIGNAL CALCULATION (optimized): {total_signals_time:.3f} seconds", flush=True)
-        print(f"⏱️ [SIGNALS] Latest row - Buy: {self.df.loc[latest_idx, 'buy_signal']}, Sell: {self.df.loc[latest_idx, 'sell_signal']}", flush=True)
+        print(f"⏱️ [TIMING] 📊 TOTAL SIGNAL CALCULATION (optimized): {total_signals_time:.3f} seconds")
+        print(f"⏱️ [SIGNALS] Latest row - Buy: {self.df.loc[latest_idx, 'buy_signal']}, Sell: {self.df.loc[latest_idx, 'sell_signal']}")
         
         return [buy_signal_column], [sell_signal_column]
     
@@ -500,7 +500,7 @@ class TradeMonitor:
     
     async def monitor_and_trade(self) -> AsyncGenerator[Dict, None]:
         self.is_monitoring = True
-        print(f"🔄 [TRADEMONITOR] monitor_and_trade started: is_monitoring set to True for strategy {self.strategy_id}, Instance ID: {id(self)}", flush=True)
+        print(f"🔄 [TRADEMONITOR] monitor_and_trade started: is_monitoring set to True for strategy {self.strategy_id}, Instance ID: {id(self)}")
         
         async for update in self._initialize_dataframe():
             yield update
@@ -509,7 +509,7 @@ class TradeMonitor:
 
         while self.is_monitoring:
             loop_start_time = time.time()
-            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, monitor ID: {id(self)}", flush=True)
+            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, monitor ID: {id(self)}")
             
             try:
                 new_data = await self._fetch_and_prepare_data()
@@ -517,15 +517,16 @@ class TradeMonitor:
                     async for update in self._process_new_data(new_data):
                         yield update
                 
+                # TODO: change this later
                 await asyncio.sleep(5)
                 if not self.is_monitoring:
-                    print(f"🛑 [SLEEP CHECK] Strategy {self.strategy_id} monitoring was stopped during sleep, breaking loop", flush=True)
+                    print(f"🛑 [SLEEP CHECK] Strategy {self.strategy_id} monitoring was stopped during sleep, breaking loop")
                     break
                 
                 loop_end_time = time.time()
                 total_loop_time = loop_end_time - loop_start_time
-                print(f"⏱️ [TIMING] 🔄 FULL LOOP CYCLE: {total_loop_time:.3f} seconds", flush=True)
-                print("=" * 80, flush=True)
+                print(f"⏱️ [TIMING] 🔄 FULL LOOP CYCLE: {total_loop_time:.3f} seconds")
+                print("=" * 80)
                 
             except Exception as e:
                 print(f"Error in trade monitor: {str(e)}")
@@ -580,7 +581,7 @@ class TradeMonitor:
                 'fig': initial_fig
             }
         except Exception as e:
-            print(f"Error generating initial results: {str(e)}", flush=True)
+            print(f"Error generating initial results: {str(e)}")
             traceback.print_exc()
 
     async def _fetch_and_prepare_data(self):
@@ -665,7 +666,7 @@ class TradeMonitor:
                     'fig': final_fig
                 }
         except Exception as e:
-            print(f"❌ Error sending final stopped status: {str(e)}", flush=True)
+            print(f"❌ Error sending final stopped status: {str(e)}")
             yield {
                 'status': 'stopped',
                 'message': 'Trading stopped',
@@ -676,40 +677,6 @@ class TradeMonitor:
     
     def stop(self):
         """Stop the monitoring"""
-        print(f"🛑 [TRADEMONITOR] STOP called for strategy {self.strategy_id}, Instance ID: {id(self)}. Current is_monitoring: {self.is_monitoring}", flush=True)
+        print(f"🛑 [TRADEMONITOR] STOP called for strategy {self.strategy_id}, Instance ID: {id(self)}. Current is_monitoring: {self.is_monitoring}")
         self.is_monitoring = False
-        print(f"🛑 [TRADEMONITOR] is_monitoring set to False for strategy {self.strategy_id}, Instance ID: {id(self)}", flush=True)
-
-# async def start_trade_monitor(
-#     db: Session,
-#     strategy_id: int,
-#     network: str,
-#     pool_address: str,
-#     buy_signal_id: int,
-#     buy_operator: str,
-#     buy_threshold: float,
-#     sell_signal_id: int,
-#     sell_operator: str,
-#     sell_threshold: float,
-#     position_size: float
-# ) -> AsyncGenerator[Dict, None]:
-#     """
-#     Start monitoring trades for a strategy
-#     Returns an async generator that yields updates
-#     """
-#     monitor = TradeMonitor(
-#         db=db,
-#         strategy_id=strategy_id,
-#         network=network,
-#         pool_address=pool_address,
-#         buy_signal_id=buy_signal_id,
-#         buy_operator=buy_operator,
-#         buy_threshold=buy_threshold,
-#         sell_signal_id=sell_signal_id,
-#         sell_operator=sell_operator,
-#         sell_threshold=sell_threshold,
-#         position_size=position_size
-#     )
-    
-#     async for update in monitor.monitor_and_trade():
-#         yield update
+        print(f"🛑 [TRADEMONITOR] is_monitoring set to False for strategy {self.strategy_id}, Instance ID: {id(self)}")

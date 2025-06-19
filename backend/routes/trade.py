@@ -151,7 +151,7 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
         async with monitor_lock:
             active_monitors[strategy_id] = monitor
             all_monitors[strategy_id] = monitor
-            print(f"✅ [EXECUTE TRADE] Added strategy {strategy_id} to active_monitors. Monitor ID: {id(monitor)}, Current active: {list(active_monitors.keys())}", flush=True)
+            print(f"✅ [EXECUTE TRADE] Added strategy {strategy_id} to active_monitors. Monitor ID: {id(monitor)}, Current active: {list(active_monitors.keys())}")
             print(f"🔍 [EXECUTE TRADE] Final state - Active monitors: {list(active_monitors.keys())}, All monitors: {list(all_monitors.keys())}")
 
         async def event_generator():
@@ -162,7 +162,7 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
                 async for update in monitor.monitor_and_trade():
                     # Check if monitor has been stopped before yielding each update
                     if not monitor.is_monitoring:
-                        print(f"🛑 SSE generator: Monitor stopped for strategy {strategy_id} (ID: {monitor_id}), breaking SSE loop", flush=True)
+                        print(f"🛑 SSE generator: Monitor stopped for strategy {strategy_id} (ID: {monitor_id}), breaking SSE loop")
                         break
                         
                     print(f"📤 Backend yielding update for strategy {strategy_id} (monitor ID: {monitor_id})")
@@ -187,11 +187,11 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
                         
                     # Additional stop check after yielding
                     if not monitor.is_monitoring:
-                        print(f"🛑 SSE generator: Monitor stopped for strategy {strategy_id} (ID: {monitor_id}) after yield, breaking SSE loop", flush=True)
+                        print(f"🛑 SSE generator: Monitor stopped for strategy {strategy_id} (ID: {monitor_id}) after yield, breaking SSE loop")
                         break
                         
             except Exception as e:
-                print(f"❌ Error in event generator for strategy {strategy_id} (monitor ID: {monitor_id}): {str(e)}", flush=True)
+                print(f"❌ Error in event generator for strategy {strategy_id} (monitor ID: {monitor_id}): {str(e)}")
                 print(traceback.format_exc())
                 yield {
                     "event": "error", 
@@ -207,15 +207,15 @@ async def execute_trade(strategy_id: int, db: Session = Depends(get_db)):
                         current_monitor_id = id(monitor_to_stop)
                         print(f"🛑 SSE cleanup: Found monitor in active_monitors (ID: {current_monitor_id}) for strategy {strategy_id}")
                         monitor_to_stop.stop()
-                        print(f"🛑 SSE cleanup: Stopped monitor for strategy {strategy_id} (ID: {current_monitor_id})", flush=True)
+                        print(f"🛑 SSE cleanup: Stopped monitor for strategy {strategy_id} (ID: {current_monitor_id})")
                         
                         del active_monitors[strategy_id]
-                        print(f"🧹 SSE cleanup: Removed monitor for strategy {strategy_id} from active_monitors. Remaining active: {list(active_monitors.keys())}", flush=True)
+                        print(f"🧹 SSE cleanup: Removed monitor for strategy {strategy_id} from active_monitors. Remaining active: {list(active_monitors.keys())}")
                         
                         # Keep in all_monitors for potential manual stop
-                        print(f"ℹ️ Monitor for strategy {strategy_id} (ID: {current_monitor_id}) kept in all_monitors for manual stop", flush=True)
+                        print(f"ℹ️ Monitor for strategy {strategy_id} (ID: {current_monitor_id}) kept in all_monitors for manual stop")
                     else:
-                        print(f"🧹 SSE cleanup: Strategy {strategy_id} already removed from active monitors", flush=True)
+                        print(f"🧹 SSE cleanup: Strategy {strategy_id} already removed from active monitors")
         
         return EventSourceResponse(event_generator())
             
@@ -242,8 +242,8 @@ async def stop_trade(strategy_id: int, db: Session = Depends(get_db)):
         # Thread-safe access to monitor dictionaries
         async with monitor_lock:
             # Debug: Show current active monitors
-            print(f"🔍 [STOP TRADE] Stop request for strategy {strategy_id}. Current active monitors: {list(active_monitors.keys())}", flush=True)
-            print(f"🔍 [STOP TRADE] All monitors (including SSE-closed): {list(all_monitors.keys())}", flush=True)
+            print(f"🔍 [STOP TRADE] Stop request for strategy {strategy_id}. Current active monitors: {list(active_monitors.keys())}")
+            print(f"🔍 [STOP TRADE] All monitors (including SSE-closed): {list(all_monitors.keys())}")
             
             # Show detailed info about monitors
             if strategy_id in active_monitors:
@@ -289,7 +289,7 @@ async def stop_trade(strategy_id: int, db: Session = Depends(get_db)):
                     "strategy_id": strategy_id
                 }
             else:
-                print(f"❌ [STOP TRADE] No monitor found for strategy {strategy_id} in either active or all monitors", flush=True)
+                print(f"❌ [STOP TRADE] No monitor found for strategy {strategy_id} in either active or all monitors")
                 return {
                     "success": False,
                     "message": f"No trading session found for strategy {strategy_id}",
