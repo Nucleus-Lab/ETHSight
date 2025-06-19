@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 function BacktestTrade() {
   const [activeTab, setActiveTab] = useState('results')
   const [activeStrategies, setActiveStrategies] = useState([])
-  const [lastResults, setLastResults] = useState(null)
+  const [lastResults, setLastResults] = useState(null) 
   const [liveTradeData, setLiveTradeData] = useState(null) 
   
   // Log state changes for debugging
@@ -37,7 +37,7 @@ function BacktestTrade() {
       setActiveTab('results');
       
       // Show appropriate notification
-      toast.success('Backtest completed successfully!');
+        toast.success('Backtest completed successfully!');
     } else {
       // Handle errors
       toast.error(result.message || 'Operation failed. Please try again.');

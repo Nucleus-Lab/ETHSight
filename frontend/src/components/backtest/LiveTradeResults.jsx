@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Plot from 'react-plotly.js';
-import { executeTrade, stopTrade } from '../../services/api';
+import { stopTrade } from '../../services/api';
 
 const LiveTradeResults = ({ onStop, strategy }) => {
+  console.log('🔄 LiveTradeResults RENDER - strategy:', strategy);
+  console.log('🔄 LiveTradeResults RENDER - strategy keys:', strategy ? Object.keys(strategy) : 'null');
+  console.log('🔄 LiveTradeResults RENDER - strategy object reference:', strategy);
+  
   const [tradingStats, setTradingStats] = useState(null);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [currentPosition, setCurrentPosition] = useState(0);
@@ -16,58 +20,62 @@ const LiveTradeResults = ({ onStop, strategy }) => {
   const [isStopped, setIsStopped] = useState(false);
   const isStoppingManuallyRef = useRef(false);
   const eventSourceRef = useRef(null);
-  const isConnectingRef = useRef(false); // Prevent multiple connection attempts
-  const currentStrategyIdRef = useRef(null); // Track current strategy ID
+  const lastStrategyIdRef = useRef(null);
+  const lastStrategyRef = useRef(null);
+  const hasRunOnce = useRef(false);
+
+
+  console.log('🔄 LiveTradeResults RENDER - current tradingStats:', tradingStats);
+  console.log('🔄 LiveTradeResults RENDER - current currentPrice:', currentPrice);
+  console.log('🔄 LiveTradeResults RENDER - current currentPosition:', currentPosition);
+  console.log('🔄 LiveTradeResults RENDER - current totalPnl:', totalPnl);
+  console.log('🔄 LiveTradeResults RENDER - current plotData:', plotData);
+  console.log('🔄 LiveTradeResults RENDER - current lastUpdate:', lastUpdate);
+  console.log('🔄 LiveTradeResults RENDER - current error:', error);
+  console.log('🔄 LiveTradeResults RENDER - current initializationStatus:', initializationStatus);
+  console.log('🔄 LiveTradeResults RENDER - current isInitialized:', isInitialized);
+  console.log('🔄 LiveTradeResults RENDER - current isProcessing:', isProcessing);
+  console.log('🔄 LiveTradeResults RENDER - current isStopped:', isStopped);
+  
 
   useEffect(() => {
-    // Clean up function declaration
+    console.log('🔄 LiveTradeResults useEffect TRIGGERED');
+    console.log('🔄 LiveTradeResults dependencies - strategy.strategy_id:', strategy?.strategy_id);
+    let didCancel = false;
+
     const cleanup = () => {
+      console.log('🧼 Attempting cleanup. eventSourceRef.current:', eventSourceRef.current, hasRunOnce.current);
+      hasRunOnce.current = false;
       if (eventSourceRef.current) {
+        console.log('✅ Closing EventSource');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
-      isConnectingRef.current = false;
     };
 
-    // Validate strategy
-    if (!strategy || !strategy.strategy_id) {
-      setError('No strategy ID provided to LiveTradeResults');
+    if (!strategy || !strategy.strategy_id || !strategy.createEventSource) {
+      console.warn('❌ Missing strategy or SSE factory');
       return cleanup;
     }
 
-    // Check if strategy ID has actually changed
-    if (currentStrategyIdRef.current === strategy.strategy_id) {
-      console.log('🔍 Strategy ID unchanged, skipping connection setup');
+    if (hasRunOnce.current) {
+      console.log('🛑 Already connected once — skipping duplicate');
       return cleanup;
     }
 
-    // Prevent multiple connection attempts
-    if (isConnectingRef.current || eventSourceRef.current) {
-      console.log('🚫 Connection already in progress or exists, skipping...');
-      return cleanup;
-    }
+    hasRunOnce.current = true;
 
-    console.log('Starting trade execution with strategy ID:', strategy.strategy_id);
-    
-    // Update current strategy ID reference
-    currentStrategyIdRef.current = strategy.strategy_id;
-    
-    // Execute trade and get EventSource
-    const setupTrading = async () => {
+    const setup = async () => {
       try {
-        isConnectingRef.current = true;
-        console.log('Setting up trade execution for strategy:', strategy.strategy_id);
-        
-        // Double-check no existing connection
-        if (eventSourceRef.current) {
-          console.log('🚫 EventSource already exists, closing old one first');
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
+        const eventSource = await strategy.createEventSource();
+        // to avoid re-creating the event source if the component is unmounted, especially in Strict Mode
+        if (didCancel) {
+          console.warn('🛑 Setup aborted: component unmounted or effect re-ran');
+          eventSource?.close();
+          return;
         }
-        
-        const eventSource = await executeTrade(strategy.strategy_id);
+
         eventSourceRef.current = eventSource;
-        isConnectingRef.current = false;
         
         eventSource.onopen = () => {
           console.log('SSE connection opened');
@@ -77,127 +85,112 @@ const LiveTradeResults = ({ onStop, strategy }) => {
           console.error('SSE Error:', error);
           console.error('ReadyState:', eventSource.readyState);
           
-          // Check if this is a manual stop or an actual error
           if (isStoppingManuallyRef.current) {
             console.log('SSE closed due to manual stop - this is expected');
             setIsStopped(true);
             isStoppingManuallyRef.current = false;
-            // Don't set error for manual stops
           } else {
-            // This is an unexpected error
             setError('Connection error occurred. Please check the console for details.');
           }
           eventSource.close();
           eventSourceRef.current = null;
-          isConnectingRef.current = false;
         };
         
-        // Listen for specific event types
         eventSource.onmessage = (event) => {
           console.log('Raw event.data received:', event.data);
           console.log('Type of event.data:', typeof event.data);
-                      try {
-              const update = JSON.parse(event.data);
-              console.log('Parsed update:', update);
-            
-              if (update.status === 'initializing') {
-                // Handle initialization progress
+          try {
+            const update = JSON.parse(event.data);
+            console.log('Parsed update:', update);
+          
+            if (update.status === 'initializing') {
+              setInitializationStatus({
+                message: update.message,
+                progress: update.progress
+              });
+              setIsInitialized(false);
+            } else if (update.status === 'ready') {
+              setInitializationStatus({
+                message: update.message,
+                progress: update.progress
+              });
+              setIsInitialized(true);
+            } else if (update.status === 'processing') {
+              setIsInitialized(true);
+              setIsProcessing(true);
+              if (update.message) {
                 setInitializationStatus({
                   message: update.message,
-                  progress: update.progress
+                  progress: 50
                 });
-                setIsInitialized(false);
-              } else if (update.status === 'ready') {
-                // Initialization complete
-                setInitializationStatus({
-                  message: update.message,
-                  progress: update.progress
-                });
-                setIsInitialized(true);
-              } else if (update.status === 'processing') {
-                // Handle processing updates (show current price but indicate processing)
-                setIsInitialized(true);
-                setIsProcessing(true);
-                if (update.message) {
-                  setInitializationStatus({
-                    message: update.message,
-                    progress: 50 // Show partial progress during processing
-                  });
-                }
-                if (update.price) {
-                  setCurrentPrice(update.price);
-                }
-                if (update.timestamp) {
-                  setLastUpdate(update.timestamp);
-                }
-              } else if (update.status === 'update') {
-                // Handle live trading updates
-                setIsInitialized(true);
-                setIsProcessing(false);
-                
-                // Update price chart
-                if (update.fig) {
-                  const figure = JSON.parse(update.fig);
-                  setPlotData(figure);
-                }
-                
-                // Update trading stats
-                if (update.trading_stats) {
-                  setTradingStats(update.trading_stats);
-                }
-                
-                // Update current state
-                setCurrentPrice(update.price);
-                setCurrentPosition(update.current_position);
-                setTotalPnl(update.total_pnl);
-                setLastUpdate(update.timestamp);
-                
-                // Handle trade notifications
-                if (update.trade_executed) {
-                  const trade = update.trade_executed;
-                  console.log(`${trade.type.toUpperCase()} executed at ${trade.price}`);
-                }
-              } else if (update.status === 'stopped') {
-                // Handle trading stopped by backend
-                console.log('Trading stopped by backend');
-                setIsInitialized(true);
-                setIsProcessing(false);
-                setIsStopped(true);
-                
-                // Update final state if provided
-                if (update.price) setCurrentPrice(update.price);
-                if (update.current_position !== undefined) setCurrentPosition(update.current_position);
-                if (update.total_pnl !== undefined) setTotalPnl(update.total_pnl);
-                if (update.timestamp) setLastUpdate(update.timestamp);
-                
-                // Update final data
-                if (update.fig) {
-                  const figure = JSON.parse(update.fig);
-                  setPlotData(figure);
-                }
-                if (update.trading_stats) {
-                  setTradingStats(update.trading_stats);
-                }
               }
+              if (update.price) {
+                setCurrentPrice(update.price);
+              }
+              if (update.timestamp) {
+                setLastUpdate(update.timestamp);
+              }
+            } else if (update.status === 'update') {
+              setIsInitialized(true);
+              setIsProcessing(false);
+              
+              if (update.fig) {
+                const figure = JSON.parse(update.fig);
+                setPlotData(figure);
+              }
+              
+              if (update.trading_stats) {
+                setTradingStats(update.trading_stats);
+              }
+              
+              setCurrentPrice(update.price);
+              setCurrentPosition(update.current_position);
+              setTotalPnl(update.total_pnl);
+              setLastUpdate(update.timestamp);
+              
+              if (update.trade_executed) {
+                const trade = update.trade_executed;
+                console.log(`${trade.type.toUpperCase()} executed at ${trade.price}`);
+              }
+            } else if (update.status === 'stopped') {
+              console.log('Trading stopped by backend');
+              setIsInitialized(true);
+              setIsProcessing(false);
+              setIsStopped(true);
+              
+              if (update.price) setCurrentPrice(update.price);
+              if (update.current_position !== undefined) setCurrentPosition(update.current_position);
+              if (update.total_pnl !== undefined) setTotalPnl(update.total_pnl);
+              if (update.timestamp) setLastUpdate(update.timestamp);
+              
+              if (update.fig) {
+                const figure = JSON.parse(update.fig);
+                setPlotData(figure);
+              }
+              if (update.trading_stats) {
+                setTradingStats(update.trading_stats);
+              }
+            }
           } catch (error) {
             console.error('Error parsing SSE data:', error);
             console.error('Raw data that failed to parse:', event.data);
           }
         };
+        
       } catch (error) {
-        console.error('Error setting up trade execution:', error);
-        setError(`Failed to start trading: ${error.message}`);
-        isConnectingRef.current = false;
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
+        if (!didCancel) {
+          setError(`Failed to start trading: ${error.message}`);
         }
       }
     };
 
-    setupTrading();
-    return cleanup;
-  }, [strategy?.strategy_id]); // Keep the same dependency but add ID tracking
+    setup();
+
+    return () => {
+      didCancel = true;
+      cleanup();
+    };
+  }, [strategy?.strategy_id]);
 
   const handleStop = async () => {
     console.log('Stop button clicked');
@@ -205,17 +198,14 @@ const LiveTradeResults = ({ onStop, strategy }) => {
     console.log('onStop callback exists:', !!onStop);
     console.log('Strategy ID:', strategy?.strategy_id);
     
-    // Set flag to indicate manual stop before closing connection
     isStoppingManuallyRef.current = true;
     
-    // Close EventSource connection first
     if (eventSourceRef.current) {
       console.log('Closing EventSource connection...');
       eventSourceRef.current.close();
       console.log('EventSource readyState after close:', eventSourceRef.current.readyState);
     }
     
-    // Call backend stop endpoint
     if (strategy?.strategy_id) {
       try {
         console.log('Calling backend stop endpoint...');
@@ -229,13 +219,11 @@ const LiveTradeResults = ({ onStop, strategy }) => {
         }
       } catch (error) {
         console.error('❌ Error calling backend stop endpoint:', error);
-        // Continue with frontend cleanup even if backend call fails
       }
     } else {
       console.warn('No strategy ID available for backend stop call');
     }
     
-    // Call frontend callback to update UI
     if (onStop) {
       console.log('Calling onStop callback...');
       onStop();
@@ -244,7 +232,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
     }
   };
 
-  // Show error state if there's an error (but not if stopped)
   if (error && !isStopped) {
     return (
       <div className="w-full">
@@ -257,7 +244,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
 
   return (
     <div className="w-full">
-      {/* Header with current status */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Live Trading Status</h3>
@@ -287,7 +273,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
         )}
       </div>
 
-      {/* Initialization Progress Bar */}
       {!isInitialized && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between mb-2">
@@ -304,7 +289,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
         </div>
       )}
 
-      {/* Current position and PnL */}
       {isInitialized && (
         <>
           <div className="grid grid-cols-3 gap-6 mb-6">
@@ -328,7 +312,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
             </div>
           </div>
 
-          {/* Trading Stats */}
           {tradingStats && (
             <div className="bg-white p-6 rounded-lg shadow mb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Trading Statistics</h3>
@@ -357,7 +340,6 @@ const LiveTradeResults = ({ onStop, strategy }) => {
             </div>
           )}
 
-          {/* Price Chart */}
           {plotData && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <Plot

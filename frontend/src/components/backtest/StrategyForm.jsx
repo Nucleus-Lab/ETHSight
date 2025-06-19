@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import DatePicker from 'react-datepicker';
 import { Switch } from '@headlessui/react';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getAllSignalsForUser, runBacktest, getUserStrategies, getStrategyById } from '../../services/api';
+import { getAllSignalsForUser, runBacktest, getUserStrategies, getStrategyById, executeTrade } from '../../services/api';
 
 // Add these constants at the top of the file after imports
 const NETWORKS = [
@@ -65,6 +65,9 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
   
   // Fetch signals from API
   useEffect(() => {
+    console.log('🔄 StrategyForm useEffect TRIGGERED');
+    console.log('🔄 StrategyForm dependencies - authenticated:', authenticated);
+    console.log('🔄 StrategyForm dependencies - user.wallet.address:', user?.wallet?.address);
     const fetchSignals = async () => {
       // Only fetch if user is authenticated and has a wallet
       if (!authenticated || !user?.wallet?.address) {
@@ -167,6 +170,14 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
     return `Signal #${signal.signal_id}`;
   };
   
+  // Use useCallback to create a stable reference for createEventSource
+  const createEventSource = useCallback(() => {
+    if (!selectedStrategyId) {
+      throw new Error('No strategy selected');
+    }
+    return executeTrade(selectedStrategyId);
+  }, [selectedStrategyId]);
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -178,15 +189,14 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
     
     try {
       if (isTradeMode) {
-        if (!selectedStrategyId) {
-          throw new Error('No strategy selected');
-        }
+        console.log('Executing trade for strategy in StrategyForm.jsx:', selectedStrategyId);
         
-        // Store strategy ID and start live trading
+        // Store strategy with a stable function reference
         const strategy = {
           strategy_id: selectedStrategyId,
           network,
-          timeframe
+          timeframe,
+          createEventSource
         };
         setCurrentStrategy(strategy);
         setIsLiveTrading(true);

@@ -3,7 +3,10 @@ import Plot from 'react-plotly.js';
 import LiveTradeResults from './LiveTradeResults';
 
 const BacktestResultCard = ({ result, resultId, onStopLiveTrade }) => {
-  console.log('Rendering BacktestResultCard for result:', resultId);
+  console.log('🏗️ BacktestResultCard RENDER - resultId:', resultId);
+  console.log('🏗️ BacktestResultCard RENDER - result:', result);
+  console.log('🏗️ BacktestResultCard RENDER - result.isLiveTrade:', result?.isLiveTrade);
+  console.log('🏗️ BacktestResultCard RENDER - result.strategy:', result?.strategy);
 
   if (!result) {
     return (

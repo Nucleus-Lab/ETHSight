@@ -5,6 +5,9 @@ import WelcomeAnimation from '../common/WelcomeAnimation';
 import BacktestResultCard from './BacktestResultCard';
 
 const BacktestResults = ({ lastResults, liveTradeData, onStopLiveTrade }) => {
+  console.log('📊 BacktestResults RENDER - liveTradeData:', liveTradeData);
+  console.log('📊 BacktestResults RENDER - lastResults:', lastResults);
+  
   const { authenticated, user } = usePrivy();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,6 +15,11 @@ const BacktestResults = ({ lastResults, liveTradeData, onStopLiveTrade }) => {
 
   // Process live trade data or last results when they're updated
   useEffect(() => {
+    console.log('🔄 BacktestResults useEffect TRIGGERED');
+    console.log('🔄 BacktestResults dependencies - lastResults:', lastResults);
+    console.log('🔄 BacktestResults dependencies - liveTradeData:', liveTradeData);
+    console.log('🎯 activeResult before update:', activeResult);
+    
     if (liveTradeData) {
       console.log('BacktestResults - Processing liveTradeData:', liveTradeData);
       
@@ -29,7 +37,7 @@ const BacktestResults = ({ lastResults, liveTradeData, onStopLiveTrade }) => {
       console.log('BacktestResults - Setting activeResult for live trade:', liveTradeResult);
       setActiveResult(liveTradeResult);
       setLoading(false);
-    } else if (lastResults && lastResults.success) {
+    } else if (lastResults) {
       console.log('BacktestResults - Processing lastResults:', lastResults);
       console.log('BacktestResults - backtest_results in lastResults:', lastResults.backtest_results);
       console.log('BacktestResults - signals in lastResults:', lastResults.signals);
@@ -50,6 +58,7 @@ const BacktestResults = ({ lastResults, liveTradeData, onStopLiveTrade }) => {
     } else {
       setLoading(false);
     }
+    console.log('🎯 activeResult after update:', activeResult);
   }, [lastResults, liveTradeData]);
 
   // Set initial loading state
