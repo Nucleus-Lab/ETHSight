@@ -7,6 +7,7 @@ import ChatToggleButton from './components/layout/ChatToggleButton'
 import { PrivyProvider } from '@privy-io/react-auth';
 import { CanvasProvider } from './contexts/CanvasContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
+import { Toaster } from 'react-hot-toast';
 import './App.css'
 
 function App() {
@@ -64,6 +65,16 @@ function App() {
           </ChatProvider>
         </CanvasProvider>
       </PrivyProvider>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 6000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
     </SubscriptionProvider>
   )
 }

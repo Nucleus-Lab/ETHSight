@@ -239,11 +239,16 @@ class TradeMonitor:
         self.entry_price = 0
         self.total_pnl = 0
         self.trades = []
+        self.executed_trades = []  # Store executed trades with transaction hashes
         
-        # Data storage
+        # Monitoring state
+        self.is_monitoring = False
         self.df = pd.DataFrame()
         self.last_update = None
-        self.is_monitoring = False
+        
+        # Store signal information for plotting
+        self.buy_signal_info = None
+        self.sell_signal_info = None
         
         # Add instance tracking for debugging
         print(f"🏗️ [TRADEMONITOR] NEW INSTANCE created for strategy {strategy_id}. Instance ID: {id(self)}")
@@ -448,6 +453,7 @@ class TradeMonitor:
                     'transaction_hash': result['transaction_hash']
                 }
                 print(f"🔵 Buy Signal: Price={current_price}")
+                self.executed_trades.append(trade_executed)
             else:
                 print(f"❌ [ERROR] Swap failed")
                 # remove the buy signal to not visualize it in the chart and not use it for calculating trading stats
@@ -480,6 +486,7 @@ class TradeMonitor:
                 
                 self.current_position = 0
                 print(f"🔴 Sell Signal: Price={current_price}, PnL={pnl_pct:.2f}%")
+                self.executed_trades.append(trade_executed)
             else:
                 print(f"❌ [ERROR] Swap failed")
                 # remove the sell signal to not visualize it in the chart and not use it for calculating trading stats
@@ -581,7 +588,8 @@ class TradeMonitor:
                 'current_position': self.current_position,
                 'total_pnl': self.total_pnl,
                 'trading_stats': initial_stats,
-                'fig': initial_fig
+                'fig': initial_fig,
+                'executed_trades': self.executed_trades
             }
         except Exception as e:
             print(f"Error generating initial results: {str(e)}")
@@ -668,7 +676,8 @@ class TradeMonitor:
             'current_position': self.current_position,
             'total_pnl': self.total_pnl,
             'trading_stats': stats,
-            'fig': fig
+            'fig': fig,
+            'executed_trades': self.executed_trades
         }
 
     async def _send_final_status(self) -> AsyncGenerator[Dict, None]:
@@ -693,7 +702,8 @@ class TradeMonitor:
                     'current_position': self.current_position,
                     'total_pnl': self.total_pnl,
                     'trading_stats': final_stats,
-                    'fig': final_fig
+                    'fig': final_fig,
+                    'executed_trades': self.executed_trades
                 }
         except Exception as e:
             print(f"❌ Error sending final stopped status: {str(e)}")
@@ -702,7 +712,8 @@ class TradeMonitor:
                 'message': 'Trading stopped',
                 'timestamp': self.last_update.isoformat() if self.last_update else None,
                 'current_position': self.current_position,
-                'total_pnl': self.total_pnl
+                'total_pnl': self.total_pnl,
+                'executed_trades': self.executed_trades
             }
     
     def stop(self):

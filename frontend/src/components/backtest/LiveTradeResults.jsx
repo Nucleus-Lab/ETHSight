@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Plot from 'react-plotly.js';
 import { stopTrade } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const LiveTradeResults = ({ onStop, strategy }) => {
   console.log('🔄 LiveTradeResults RENDER - strategy:', strategy);
@@ -18,12 +19,54 @@ const LiveTradeResults = ({ onStop, strategy }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
+  const [executedTrades, setExecutedTrades] = useState([]);
   const isStoppingManuallyRef = useRef(false);
   const eventSourceRef = useRef(null);
   const lastStrategyIdRef = useRef(null);
   const lastStrategyRef = useRef(null);
   const hasRunOnce = useRef(false);
 
+  // Function to show trade toast notification
+  const showTradeToast = (trade) => {
+    console.log('🍞 showTradeToast called with trade:', trade);
+    const isBuyingTrade = trade.type === 'buy';
+    
+    // Create formatted message with better spacing and alignment
+    const tradeType = `${isBuyingTrade ? '🟢 BUY' : '🔴 SELL'} EXECUTED`;
+    const tradeSize = `📊 Size: ${trade.size} ${isBuyingTrade ? 'WBNB → CAKE' : 'CAKE → WBNB'}`;
+    const tradePrice = `💰 Price: $${trade.price?.toFixed(4)}`;
+    
+    let message = `${tradeType}\n\n${tradeSize}\n${tradePrice}`;
+    
+    if (trade.pnl_pct) {
+      const pnlIcon = trade.pnl_pct >= 0 ? '📈' : '📉';
+      const pnlText = `${pnlIcon} PnL: ${trade.pnl_pct > 0 ? '+' : ''}${trade.pnl_pct.toFixed(2)}%`;
+      message += `\n${pnlText}`;
+    }
+    
+    if (trade.transaction_hash) {
+      const shortHash = trade.transaction_hash.length > 10 
+        ? `${trade.transaction_hash.slice(0, 6)}...${trade.transaction_hash.slice(-4)}`
+        : trade.transaction_hash;
+      message += `\n\n🔗 Tx: ${shortHash}`;
+    }
+
+    // Use simple toast.success for all trades
+    toast.success(message, {
+      duration: 8000,
+      position: 'top-right',
+      style: {
+        minWidth: '320px',
+        maxWidth: '400px',
+        whiteSpace: 'pre-line',
+        fontSize: '14px',
+        lineHeight: '1.4',
+        padding: '16px',
+        borderRadius: '8px',
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+      },
+    });
+  };
 
   console.log('🔄 LiveTradeResults RENDER - current tradingStats:', tradingStats);
   console.log('🔄 LiveTradeResults RENDER - current currentPrice:', currentPrice);
@@ -36,6 +79,7 @@ const LiveTradeResults = ({ onStop, strategy }) => {
   console.log('🔄 LiveTradeResults RENDER - current isInitialized:', isInitialized);
   console.log('🔄 LiveTradeResults RENDER - current isProcessing:', isProcessing);
   console.log('🔄 LiveTradeResults RENDER - current isStopped:', isStopped);
+  console.log('🔄 LiveTradeResults RENDER - current executedTrades:', executedTrades);
   
 
   useEffect(() => {
@@ -148,9 +192,18 @@ const LiveTradeResults = ({ onStop, strategy }) => {
               setTotalPnl(update.total_pnl);
               setLastUpdate(update.timestamp);
               
+              // Update executed trades list
+              if (update.executed_trades) {
+                console.log('📊 Updating executed trades:', update.executed_trades);
+                setExecutedTrades(update.executed_trades);
+              }
+              
               if (update.trade_executed) {
                 const trade = update.trade_executed;
-                console.log(`${trade.type.toUpperCase()} executed at ${trade.price}`);
+                console.log(`${trade.type.toUpperCase()} executed at ${trade.price}`, trade);
+                // Show toast notification for the executed trade
+                console.log('🔥 About to show toast for trade:', trade);
+                showTradeToast(trade);
               }
             } else if (update.status === 'stopped') {
               console.log('Trading stopped by backend');
@@ -169,6 +222,9 @@ const LiveTradeResults = ({ onStop, strategy }) => {
               }
               if (update.trading_stats) {
                 setTradingStats(update.trading_stats);
+              }
+              if (update.executed_trades) {
+                setExecutedTrades(update.executed_trades);
               }
             }
           } catch (error) {
@@ -342,7 +398,7 @@ const LiveTradeResults = ({ onStop, strategy }) => {
           )}
 
           {plotData && (
-            <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="bg-gray-50 p-4 rounded-lg mb-6">
               <Plot
                 data={plotData.data}
                 layout={{
@@ -354,6 +410,56 @@ const LiveTradeResults = ({ onStop, strategy }) => {
                 useResizeHandler={true}
                 className="w-full"
               />
+            </div>
+          )}
+
+          {/* Trade History */}
+          {executedTrades.length > 0 && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Trade History</h3>
+              <div className="space-y-3">
+                {executedTrades.map((trade, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                    <div className="flex items-center space-x-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        trade.type === 'buy' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {trade.type.toUpperCase()}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          ${trade.price?.toFixed(4)} 
+                          {trade.pnl_pct && (
+                            <span className={`ml-2 ${trade.pnl_pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ({trade.pnl_pct > 0 ? '+' : ''}{trade.pnl_pct.toFixed(2)}%)
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(trade.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {trade.transaction_hash && (
+                        <a
+                          href={`https://testnet.bscscan.com/tx/${trade.transaction_hash.startsWith('0x') ? trade.transaction_hash : '0x' + trade.transaction_hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                        >
+                          View Tx
+                          <svg className="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

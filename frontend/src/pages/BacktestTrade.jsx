@@ -6,7 +6,7 @@ import { ChatProvider } from '../contexts/ChatContext'
 import { PrivyProvider } from '@privy-io/react-auth';
 import { CanvasProvider } from '../contexts/CanvasContext';
 import { SubscriptionProvider } from '../contexts/SubscriptionContext';
-import { toast } from 'react-hot-toast'; 
+import { toast, Toaster } from 'react-hot-toast'; 
 
 function BacktestTrade() {
   const [activeTab, setActiveTab] = useState('results')
@@ -37,7 +37,7 @@ function BacktestTrade() {
       setActiveTab('results');
       
       // Show appropriate notification
-        toast.success('Backtest completed successfully!');
+      toast.success('Backtest completed successfully!');
     } else {
       // Handle errors
       toast.error(result.message || 'Operation failed. Please try again.');
@@ -121,6 +121,16 @@ function BacktestTrade() {
           </ChatProvider>
         </CanvasProvider>
       </PrivyProvider>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 6000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
     </SubscriptionProvider>
   )
 }
