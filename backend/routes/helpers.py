@@ -499,22 +499,52 @@ class TradeMonitor:
         return trade_executed
     
     async def monitor_and_trade(self) -> AsyncGenerator[Dict, None]:
-        """
-        Monitor price and generate trading signals
-        Yields updated plot and trading stats
-        """
         self.is_monitoring = True
         print(f"🔄 [TRADEMONITOR] monitor_and_trade started: is_monitoring set to True for strategy {self.strategy_id}, Instance ID: {id(self)}", flush=True)
         
-        # Yield initialization status
+        async for update in self._initialize_dataframe():
+            yield update
+        async for update in self._generate_initial_results():
+            yield update
+
+        while self.is_monitoring:
+            loop_start_time = time.time()
+            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, monitor ID: {id(self)}", flush=True)
+            
+            try:
+                new_data = await self._fetch_and_prepare_data()
+                if new_data is not None:
+                    async for update in self._process_new_data(new_data):
+                        yield update
+                
+                await asyncio.sleep(5)
+                if not self.is_monitoring:
+                    print(f"🛑 [SLEEP CHECK] Strategy {self.strategy_id} monitoring was stopped during sleep, breaking loop", flush=True)
+                    break
+                
+                loop_end_time = time.time()
+                total_loop_time = loop_end_time - loop_start_time
+                print(f"⏱️ [TIMING] 🔄 FULL LOOP CYCLE: {total_loop_time:.3f} seconds", flush=True)
+                print("=" * 80, flush=True)
+                
+            except Exception as e:
+                print(f"Error in trade monitor: {str(e)}")
+                print(traceback.format_exc())
+                yield {
+                    'status': 'error',
+                    'error': str(e)
+                }
+                await asyncio.sleep(5)
+        
+        async for update in self._send_final_status():
+            yield update
+    
+    async def _initialize_dataframe(self) -> AsyncGenerator[Dict, None]:
         yield {
             'status': 'initializing',
             'message': 'Starting trade monitor...',
             'progress': 0
         }
-        
-        # Initialize dataframe with progress updates
-        init_start_time = time.time()
         try:
             async for progress_update in self.initialize_dataframe_async():
                 yield progress_update
@@ -526,40 +556,19 @@ class TradeMonitor:
                 'error': f"Initialization failed: {str(e)}"
             }
             return
-        init_end_time = time.time()
-        print(f"⏱️ [TIMING] INITIALIZATION took: {init_end_time - init_start_time:.3f} seconds", flush=True)
-        
-        # Yield ready status
-        yield {
-            'status': 'ready',
-            'message': 'Trade monitor ready, starting live trading...',
-            'progress': 100
-        }
-        
-        # Yield initial results immediately using existing data
-        print("[TRADE MONITOR] Generating initial plot with existing data...", flush=True)
-        initial_results_start_time = time.time()
+
+    async def _generate_initial_results(self) -> AsyncGenerator[Dict, None]:
         try:
-            # Use data we already have from initialization
-            initial_stats_start = time.time()
             initial_stats = calculate_trading_stats(self.df, [], [])
-            initial_stats_end = time.time()
-            print(f"⏱️ [TIMING] Initial stats calculation: {initial_stats_end - initial_stats_start:.3f} seconds", flush=True)
-            
-            initial_plot_start = time.time()
             initial_fig = plot_backtest_results(
                 df=self.df,
                 buy_indicator_info=self.buy_signal_info,
                 sell_indicator_info=self.sell_signal_info,
-                buy_signal_columns=[],  # no buy and sell signals yet
-                sell_signal_columns=[],  # no buy and sell signals yet
+                buy_signal_columns=[],
+                sell_signal_columns=[],
                 network=self.network,
                 pool=self.pool_address
             )
-            initial_plot_end = time.time()
-            print(f"⏱️ [TIMING] Initial plot generation: {initial_plot_end - initial_plot_start:.3f} seconds", flush=True)
-            
-            # Yield initial results immediately
             yield {
                 'status': 'update',
                 'timestamp': self.last_update.isoformat(),
@@ -570,180 +579,70 @@ class TradeMonitor:
                 'trading_stats': initial_stats,
                 'fig': initial_fig
             }
-            initial_results_end_time = time.time()
-            print(f"⏱️ [TIMING] INITIAL RESULTS total: {initial_results_end_time - initial_results_start_time:.3f} seconds", flush=True)
-            print("[TRADE MONITOR] Initial results yielded successfully!", flush=True)
-            
         except Exception as e:
             print(f"Error generating initial results: {str(e)}", flush=True)
             traceback.print_exc()
-            # Continue anyway
-        
-        while self.is_monitoring:
-            loop_start_time = time.time()
-            print(f"🔄 [LOOP START] Strategy {self.strategy_id} - is_monitoring: {self.is_monitoring}, monitor ID: {id(self)}", flush=True)
-            
-            try:
-                # Fetch latest data
-                fetch_start_time = time.time()
-                new_data = gecko_api.get_ohlc(
-                    network=self.network,
-                    pool_address=self.pool_address,
-                    timeframe='minute',
-                    aggregate=1,
-                    limit=1
-                )
-                
-                print(f"🔥 New data: {new_data}")
-                
-                # TODO: fix this (supposedly we only need timestamp)
-                new_data['datetime'] = pd.to_datetime(new_data['timestamp'], unit='s')
-                new_data = new_data.sort_values('datetime')
-                fetch_end_time = time.time()
-                print(f"⏱️ [TIMING] Data fetch: {fetch_end_time - fetch_start_time:.3f} seconds", flush=True)
-                
-                if not new_data.empty:
-                    latest_datetime = new_data['datetime'].iloc[-1]
-                    
-                    # Only process if we have new data, or new data is at the same time as the last update
-                    if self.last_update is None or latest_datetime >= self.last_update:
-                        # Update or append new data (don't drop duplicates, update with latest values)
-                        data_prep_start = time.time()
-                        
-                        # Check if this timestamp already exists
-                        existing_mask = self.df['datetime'] == latest_datetime
-                        if existing_mask.any():
-                            # Update existing row with latest values
-                            print(f"⏱️ [DATA] Updating existing row for {latest_datetime}", flush=True)
-                            self.df.loc[existing_mask, ['open', 'high', 'low', 'close', 'volume']] = new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0]
-                        else:
-                            # Append new row
-                            print(f"⏱️ [DATA] Adding new row for {latest_datetime}", flush=True)
-                            self.df = pd.concat([self.df, new_data])
-                        
-                        # Keep last 100 points and sort
-                        self.df = self.df.sort_values('datetime').tail(100)
-                        self.last_update = latest_datetime
-                        data_prep_end = time.time()
-                        print(f"⏱️ [TIMING] Data preparation: {data_prep_end - data_prep_start:.3f} seconds", flush=True)
-                        
-                        print("[TRADE MONITOR] New data fetched. Processing update...", flush=True)
-                        
-                        # Yield status update before heavy computation
-                        yield {
-                            'status': 'processing',
-                            'message': 'Processing new data and calculating signals...',
-                            'timestamp': latest_datetime.isoformat(),
-                            'price': float(new_data['close'].iloc[-1])
-                        }
-                        
-                        # Calculate signals (HEAVY OPERATION)
-                        print("[TRADE MONITOR] Calculating signals...", flush=True)
-                        yield {
-                            'status': 'processing',
-                            'message': 'Calculating trading signals...',
-                            'timestamp': latest_datetime.isoformat(),
-                            'price': float(new_data['close'].iloc[-1])
-                        }
-                        signals_start_time = time.time()
-                        buy_cols, sell_cols = self._calculate_signals()
-                        signals_end_time = time.time()
-                        print(f"⏱️ [TIMING] Signal calculation: {signals_end_time - signals_start_time:.3f} seconds", flush=True)
-                        
-                        print("[TRADE MONITOR] Signals calculated. Checking for signals...", flush=True)
-                        # Check for signals in new data
-                        check_signals_start = time.time()
-                        trade = self._check_signals(self.df.iloc[-1])
-                        check_signals_end = time.time()
-                        print(f"⏱️ [TIMING] Signal checking: {check_signals_end - check_signals_start:.3f} seconds", flush=True)
-                        
-                        print("[TRADE MONITOR] Signals checked. Calculating trading stats...", flush=True)
-                        yield {
-                            'status': 'processing',
-                            'message': 'Calculating trading statistics...',
-                            'timestamp': latest_datetime.isoformat(),
-                            'price': float(new_data['close'].iloc[-1])
-                        }
-                        # Calculate trading stats (HEAVY OPERATION)
-                        stats_start_time = time.time()
-                        stats = calculate_trading_stats(self.df, buy_cols, sell_cols)
-                        stats_end_time = time.time()
-                        print(f"⏱️ [TIMING] Trading stats calculation: {stats_end_time - stats_start_time:.3f} seconds", flush=True)
-                        
-                        print("[TRADE MONITOR] Trading stats calculated. Generating plot...", flush=True)
-                        yield {
-                            'status': 'processing',
-                            'message': 'Generating updated chart...',
-                            'timestamp': latest_datetime.isoformat(),
-                            'price': float(new_data['close'].iloc[-1])
-                        }
-                        # Generate plot (HEAVY OPERATION)
-                        plot_start_time = time.time()
-                        fig = plot_backtest_results(
-                            df=self.df,
-                            buy_indicator_info=self.buy_signal_info,
-                            sell_indicator_info=self.sell_signal_info,
-                            buy_signal_columns=['buy_signal'],
-                            sell_signal_columns=['sell_signal'],
-                            network=self.network,
-                            pool=self.pool_address
-                        )
-                        plot_end_time = time.time()
-                        print(f"⏱️ [TIMING] Plot generation: {plot_end_time - plot_start_time:.3f} seconds", flush=True)
-                        
-                        print("[TRADE MONITOR] Plot generated. Yielding updated results...", flush=True)
-                        
-                        # Yield updated results
-                        yield {
-                            'status': 'update',
-                            'timestamp': latest_datetime.isoformat(),
-                            'price': float(new_data['close'].iloc[-1]),
-                            'trade_executed': trade,
-                            'current_position': self.current_position,
-                            'total_pnl': self.total_pnl,
-                            'trading_stats': stats,
-                            'fig': fig
-                        }
-                        
-                        loop_processing_end = time.time()
-                        total_processing_time = loop_processing_end - (fetch_start_time)
-                        print(f"⏱️ [TIMING] 🔥 TOTAL PROCESSING TIME: {total_processing_time:.3f} seconds", flush=True)
-                        print(f"⏱️ [TIMING] ⚡ Breakdown - Fetch: {fetch_end_time - fetch_start_time:.3f}s, " + 
-                              f"Signals(optimized): {signals_end_time - signals_start_time:.3f}s, " +
-                              f"Stats: {stats_end_time - stats_start_time:.3f}s, " +
-                              f"Plot: {plot_end_time - plot_start_time:.3f}s", flush=True)
-                
-                # Wait for 5 seconds before next update
-                sleep_start = time.time()
-                await asyncio.sleep(5)
-                sleep_end = time.time()
-                print(f"😴 [SLEEP DONE] Strategy {self.strategy_id} completed 5s sleep", flush=True)
-                
-                # Check if monitoring was stopped during sleep
-                if not self.is_monitoring:
-                    print(f"🛑 [SLEEP CHECK] Strategy {self.strategy_id} monitoring was stopped during sleep, breaking loop", flush=True)
-                    break
-                
-                loop_end_time = time.time()
-                total_loop_time = loop_end_time - loop_start_time
-                print(f"⏱️ [TIMING] 🔄 FULL LOOP CYCLE: {total_loop_time:.3f} seconds (including {sleep_end - sleep_start:.3f}s sleep)", flush=True)
-                print("=" * 80, flush=True)
-                
-            except Exception as e:
-                print(f"Error in trade monitor: {str(e)}")
-                print(traceback.format_exc())
-                yield {
-                    'status': 'error',
-                    'error': str(e)
-                }
-                await asyncio.sleep(5)  # Wait before retrying
-        
-        print(f"🏁 Monitor loop ended for strategy {self.strategy_id}. is_monitoring: {self.is_monitoring}", flush=True)
-        
-        # Send final stopped status with current data
+
+    async def _fetch_and_prepare_data(self):
+        try:
+            new_data = gecko_api.get_ohlc(
+                network=self.network,
+                pool_address=self.pool_address,
+                timeframe='minute',
+                aggregate=1,
+                limit=1
+            )
+            new_data['datetime'] = pd.to_datetime(new_data['timestamp'], unit='s')
+            new_data = new_data.sort_values('datetime')
+            if not new_data.empty:
+                latest_datetime = new_data['datetime'].iloc[-1]
+                if self.last_update is None or latest_datetime >= self.last_update:
+                    existing_mask = self.df['datetime'] == latest_datetime
+                    if existing_mask.any():
+                        self.df.loc[existing_mask, ['open', 'high', 'low', 'close', 'volume']] = new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0]
+                    else:
+                        self.df = pd.concat([self.df, new_data])
+                    self.df = self.df.sort_values('datetime').tail(100)
+                    self.last_update = latest_datetime
+                    return new_data
+        except Exception as e:
+            print(f"Error fetching data: {str(e)}")
+            traceback.print_exc()
+        return None
+
+    async def _process_new_data(self, new_data) -> AsyncGenerator[Dict, None]:
+        yield {
+            'status': 'processing',
+            'message': 'Processing new data and calculating signals...',
+            'timestamp': self.last_update.isoformat(),
+            'price': float(new_data['close'].iloc[-1])
+        }
+        buy_cols, sell_cols = self._calculate_signals()
+        trade = self._check_signals(self.df.iloc[-1])
+        stats = calculate_trading_stats(self.df, buy_cols, sell_cols)
+        fig = plot_backtest_results(
+            df=self.df,
+            buy_indicator_info=self.buy_signal_info,
+            sell_indicator_info=self.sell_signal_info,
+            buy_signal_columns=['buy_signal'],
+            sell_signal_columns=['sell_signal'],
+            network=self.network,
+            pool=self.pool_address
+        )
+        yield {
+            'status': 'update',
+            'timestamp': self.last_update.isoformat(),
+            'price': float(new_data['close'].iloc[-1]),
+            'trade_executed': trade,
+            'current_position': self.current_position,
+            'total_pnl': self.total_pnl,
+            'trading_stats': stats,
+            'fig': fig
+        }
+
+    async def _send_final_status(self) -> AsyncGenerator[Dict, None]:
         try:
             if not self.df.empty:
-                # Calculate final stats and plot
                 final_buy_cols, final_sell_cols = self._calculate_signals() if hasattr(self, 'df') and not self.df.empty else ([], [])
                 final_stats = calculate_trading_stats(self.df, final_buy_cols, final_sell_cols)
                 final_fig = plot_backtest_results(
@@ -755,7 +654,6 @@ class TradeMonitor:
                     network=self.network,
                     pool=self.pool_address
                 )
-                
                 yield {
                     'status': 'stopped',
                     'message': 'Trading stopped',
@@ -766,10 +664,8 @@ class TradeMonitor:
                     'trading_stats': final_stats,
                     'fig': final_fig
                 }
-                print(f"📤 Sent final stopped status for strategy {self.strategy_id}", flush=True)
         except Exception as e:
             print(f"❌ Error sending final stopped status: {str(e)}", flush=True)
-            # Send basic stopped status if there's an error
             yield {
                 'status': 'stopped',
                 'message': 'Trading stopped',
