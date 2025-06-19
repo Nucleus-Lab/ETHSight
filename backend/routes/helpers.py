@@ -327,7 +327,7 @@ class TradeMonitor:
         """Calculate indicators for the initial dataframe (for plotting only, no trading signals)"""
         if self.df.empty:
             return
-            
+        
         # Calculate buy signal indicators for plotting
         self.df, buy_signal_column = apply_signal_calculation_code(
             self.df, 
@@ -777,7 +777,7 @@ class TradeMonitor:
                 'current_position': self.current_position,
                 'total_pnl': self.total_pnl
             }
-
+    
     def stop(self):
         """Stop the monitoring"""
         print(f"🛑 [TRADEMONITOR] STOP called for strategy {self.strategy_id}, Instance ID: {id(self)}. Current is_monitoring: {self.is_monitoring}", flush=True)
