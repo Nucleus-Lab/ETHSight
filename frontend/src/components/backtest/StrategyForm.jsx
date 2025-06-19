@@ -570,8 +570,8 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
                     type="number"
                     value={positionSize}
                     onChange={(e) => setPositionSize(parseFloat(e.target.value))}
-                    min="0.01"
-                    step="0.01"
+                    min="0.001"
+                    step="0.001"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-main focus:border-primary-main"
                     required
                     disabled={signals.length === 0}
