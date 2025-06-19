@@ -131,6 +131,8 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
       
       try {
         const strategy = await getStrategyById(selectedStrategyId);
+        // TODO: remove this later
+        console.log("selectedStrategy", strategy);
         setSelectedStrategy(strategy);
       } catch (error) {
         console.error('Error fetching strategy details:', error);
@@ -379,11 +381,11 @@ const StrategyForm = ({ onSubmit, onLiveTradeStart, onLiveTradeStop }) => {
                     </div>
                     <div>
                       <span className="font-medium">Buy Condition: </span>
-                      {selectedStrategy.buyCondition.signal_name} {selectedStrategy.buyCondition.operator} {selectedStrategy.buyCondition.threshold}
+                      {selectedStrategy.buyCondition.signal.signal_name} {selectedStrategy.buyCondition.operator} {selectedStrategy.buyCondition.threshold}
                     </div>
                     <div>
                       <span className="font-medium">Sell Condition: </span>
-                      {selectedStrategy.sellCondition.signal_name} {selectedStrategy.sellCondition.operator} {selectedStrategy.sellCondition.threshold}
+                      {selectedStrategy.sellCondition.signal.signal_name} {selectedStrategy.sellCondition.operator} {selectedStrategy.sellCondition.threshold}
                     </div>
                     <div>
                       <span className="font-medium">Position Size: </span>
