@@ -51,7 +51,7 @@ assert bsc_testnet.is_connected(), "Failed to connect to BSC Testnet"
 WBNB = Web3.to_checksum_address('0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd')  # Testnet WBNB
 CAKE = Web3.to_checksum_address('0xFa60D973F7642B748046464e165A65B7323b0DEE')  # Testnet CAKE
 
-def swap_tokens(amount_in: float, token_in: str, token_out: str, slippage: float = 0.5) -> dict:
+def swap_tokens(amount_in: float, token_in: str, token_out: str) -> dict:
     """
     Execute a token swap on PancakeSwap
     
@@ -130,6 +130,7 @@ def swap_tokens(amount_in: float, token_in: str, token_out: str, slippage: float
         
     except Exception as e:
         print(f"Error executing swap: {str(e)}")
+        traceback.print_exc()
         raise Exception(f"Failed to execute swap: {str(e)}")
 
 def get_or_generate_signal_calculation_code(db: Session, signal_id: int) -> str:
@@ -306,16 +307,16 @@ class TradeMonitor:
         print("✅ Done initializing dataframe")
         
         # Calculate initial signals for plotting context (but no trading signals yet)
-        yield {
-            'status': 'initializing',
-            'message': 'Calculating initial indicators for chart...',
-            'progress': 75
-        }
+        # yield {
+        #     'status': 'initializing',
+        #     'message': 'Calculating initial indicators for chart...',
+        #     'progress': 75
+        # }
         
-        initial_signals_start = time.time()
-        self._calculate_initial_indicators()
-        initial_signals_end = time.time()
-        print(f"⏱️ [TIMING] Initial indicators calculation: {initial_signals_end - initial_signals_start:.3f} seconds")
+        # initial_signals_start = time.time()
+        # self._calculate_initial_indicators()
+        # initial_signals_end = time.time()
+        # print(f"⏱️ [TIMING] Initial indicators calculation: {initial_signals_end - initial_signals_start:.3f} seconds")
         
         yield {
             'status': 'initializing',
@@ -328,29 +329,41 @@ class TradeMonitor:
         if self.df.empty:
             return
         
-        # Calculate buy signal indicators for plotting
-        self.df, buy_signal_column = apply_signal_calculation_code(
-            self.df, 
-            self.buy_signal_code,
-            self.buy_signal_info['name']
-        )
+        # # Calculate buy signal indicators for plotting
+        # self.df, buy_signal_column = apply_signal_calculation_code(
+        #     self.df, 
+        #     self.buy_signal_code,
+        #     self.buy_signal_info['name']
+        # )
         
-        # Calculate sell signal indicators for plotting  
-        self.df, sell_signal_column = apply_signal_calculation_code(
-            self.df,
-            self.sell_signal_code,
-            self.sell_signal_info['name']
-        )
+        # # Calculate sell signal indicators for plotting  
+        # self.df, sell_signal_column = apply_signal_calculation_code(
+        #     self.df,
+        #     self.sell_signal_code,
+        #     self.sell_signal_info['name']
+        # )
         
+        
+        # TODO:
         # Initialize trading signal columns (but don't set any signals for historical data)
-        self.df['buy_signal'] = 0
-        self.df['sell_signal'] = 0
+        # self.df['buy_signal'] = 0
+        # self.df['sell_signal'] = 0
         
         # Store column names for later use
-        self.buy_signal_info['column'] = buy_signal_column
-        self.sell_signal_info['column'] = sell_signal_column
+        # self.buy_signal_info['column'] = buy_signal_column
+        # self.sell_signal_info['column'] = sell_signal_column
         
-        print(f"✅ Initial indicators calculated: {buy_signal_column}, {sell_signal_column}")
+        # check if there is any null values in the dataframe for buy_signal and sell_signal
+        # if self.df['buy_signal'].isnull().any():
+        #     print(f"❌ [ERROR] There are null values in the dataframe for buy_signal")
+        #     # show the indices of the rows with null values
+        #     print(self.df[self.df['buy_signal'].isnull()].index)
+        # if self.df['sell_signal'].isnull().any():
+        #     print(f"❌ [ERROR] There are null values in the dataframe for sell_signal")
+        #     # show the indices of the rows with null values
+        #     print(self.df[self.df['sell_signal'].isnull()].index)
+        
+        # print(f"✅ Initial indicators calculated: {buy_signal_column}, {sell_signal_column}")
     
     def _calculate_signals(self) -> Tuple[List[str], List[str]]:
         """Calculate indicators for new data and trading signals for latest data only"""
@@ -364,8 +377,10 @@ class TradeMonitor:
         # Only recalculate indicators for the latest row (most efficient)
         signals_calc_start = time.time()
         
+        # TODO: consider if we should limit the number of rows later or use other approach
         # Create a temporary dataframe with just the latest row for indicator calculation
-        latest_row_df = self.df.tail(20).copy()  # Take last 20 rows for context (some indicators need history)
+        # latest_row_df = self.df.tail(20).copy()  # Take last 20 rows for context (some indicators need history)
+        latest_row_df = self.df.copy()
         
         # Calculate buy indicator for the latest rows
         latest_row_df, _ = apply_signal_calculation_code(
@@ -387,7 +402,10 @@ class TradeMonitor:
             self.df.loc[latest_idx, buy_signal_column] = latest_row_df[buy_signal_column].iloc[-1]
         if sell_signal_column in latest_row_df.columns:
             self.df.loc[latest_idx, sell_signal_column] = latest_row_df[sell_signal_column].iloc[-1]
-            
+        
+        # print the newly calculated row
+        print(f"🔍 [DEBUG] Newly calculated row: {latest_row_df.iloc[-1]}")
+        
         signals_calc_end = time.time()
         print(f"⏱️ [TIMING] Indicator calculation (latest row): {signals_calc_end - signals_calc_start:.3f} seconds")
         
@@ -420,6 +438,9 @@ class TradeMonitor:
             
             self.df.loc[latest_idx, 'buy_signal'] = buy_signal_value
             
+            # print the newly calculated buy signal
+            print(f"🔍 [DEBUG] Newly calculated buy signal value: {buy_signal_value}")
+            
         buy_condition_end = time.time()
         print(f"⏱️ [TIMING] Buy condition (latest row only): {buy_condition_end - buy_condition_start:.3f} seconds")
         
@@ -430,7 +451,7 @@ class TradeMonitor:
             self.df['sell_signal'] = 0
             
         # Apply sell condition only to latest data
-        if sell_signal_column in latest_row and not pd.isna(latest_row[sell_signal_column]):
+        if sell_signal_column in latest_row and not pd.isna(latest_row[sell_signal_column]) and self.current_position > 0:
             if self.sell_operator == '>':
                 sell_signal_value = 1 if latest_row[sell_signal_column] > self.sell_threshold else 0
             elif self.sell_operator == '<':
@@ -446,6 +467,9 @@ class TradeMonitor:
                 
             self.df.loc[latest_idx, 'sell_signal'] = sell_signal_value
             
+            # print the newly calculated sell signal
+            print(f"🔍 [DEBUG] Newly calculated sell signal value: {sell_signal_value}")
+        
         sell_condition_end = time.time()
         print(f"⏱️ [TIMING] Sell condition (latest row only): {sell_condition_end - sell_condition_start:.3f} seconds")
         
@@ -460,41 +484,61 @@ class TradeMonitor:
         trade_executed = None
         current_price = row['close']
         
+        print("Current price: ", current_price)
+        
         # Check buy signal
         if row['buy_signal'] == 1 and self.current_position == 0:
-            self.current_position = 1
-            self.entry_price = current_price
-            trade_executed = {
-                'type': 'buy',
-                'price': current_price,
-                'timestamp': row['datetime'].isoformat() if hasattr(row['datetime'], 'isoformat') else str(row['datetime']),
-                'size': self.position_size
-            }
-            print(f"🔵 Buy Signal: Price={current_price}")
-            
+            # Execute swap
+            result = swap_tokens(self.position_size, WBNB, CAKE)
+            print("Swap result: ", result)
+            if result['status'] == 'success':
+                self.current_position = 1
+                self.entry_price = current_price
+                trade_executed = {
+                    'type': 'buy',
+                    'price': current_price,
+                    'timestamp': row['datetime'].isoformat() if hasattr(row['datetime'], 'isoformat') else str(row['datetime']),
+                    'size': self.position_size,
+                    'transaction_hash': result['transaction_hash']
+                }
+                print(f"🔵 Buy Signal: Price={current_price}")
+            else:
+                print(f"❌ [ERROR] Swap failed")
+                # remove the buy signal to not visualize it in the chart and not use it for calculating trading stats
+                row['buy_signal'] = 0
+                return None           
         # Check sell signal
         elif row['sell_signal'] == 1 and self.current_position > 0:
-            pnl_pct = ((current_price - self.entry_price) / self.entry_price) * 100
-            self.total_pnl += pnl_pct
-            
-            trade_executed = {
-                'type': 'sell',
-                'price': current_price,
-                'timestamp': row['datetime'].isoformat() if hasattr(row['datetime'], 'isoformat') else str(row['datetime']),
-                'size': self.position_size,
-                'pnl_pct': pnl_pct
-            }
-            
-            self.trades.append({
-                'buy_time': self.entry_price,
-                'sell_time': current_price,
-                'buy_price': self.entry_price,
-                'sell_price': current_price,
-                'profit': pnl_pct
-            })
-            
-            self.current_position = 0
-            print(f"🔴 Sell Signal: Price={current_price}, PnL={pnl_pct:.2f}%")
+            # Execute swap
+            result = swap_tokens(self.position_size, CAKE, WBNB)
+            print("Swap result: ", result)
+            if result['status'] == 'success':
+                pnl_pct = ((current_price - self.entry_price) / self.entry_price) * 100
+                self.total_pnl += pnl_pct
+                
+                trade_executed = {
+                    'type': 'sell',
+                    'price': current_price,
+                    'timestamp': row['datetime'].isoformat() if hasattr(row['datetime'], 'isoformat') else str(row['datetime']),
+                    'size': self.position_size,
+                    'pnl_pct': pnl_pct
+                }
+                
+                self.trades.append({
+                    'buy_time': self.entry_price,
+                    'sell_time': current_price,
+                    'buy_price': self.entry_price,
+                    'sell_price': current_price,
+                    'profit': pnl_pct
+                })
+                
+                self.current_position = 0
+                print(f"🔴 Sell Signal: Price={current_price}, PnL={pnl_pct:.2f}%")
+            else:
+                print(f"❌ [ERROR] Swap failed")
+                # remove the sell signal to not visualize it in the chart and not use it for calculating trading stats
+                row['sell_signal'] = 0
+                return None
             
         return trade_executed
     
@@ -514,6 +558,10 @@ class TradeMonitor:
             try:
                 new_data = await self._fetch_and_prepare_data()
                 if new_data is not None:
+                    
+                    # print the latest row in the dataframe
+                    print("Latest row in the dataframe before _process_new_data: ", self.df.iloc[-1])
+                    
                     async for update in self._process_new_data(new_data):
                         yield update
                 
@@ -560,7 +608,16 @@ class TradeMonitor:
 
     async def _generate_initial_results(self) -> AsyncGenerator[Dict, None]:
         try:
-            initial_stats = calculate_trading_stats(self.df, [], [])
+            # initialize with empty values
+            initial_stats = {
+                            'has_signals': False,
+                            'total_trades': 0,
+                            'profitable_trades': 0,
+                            'win_rate': 0,
+                            'total_return': 0,
+                            'avg_return': 0,
+                            'trades': []
+                        }
             initial_fig = plot_backtest_results(
                 df=self.df,
                 buy_indicator_info=self.buy_signal_info,
@@ -593,6 +650,7 @@ class TradeMonitor:
                 aggregate=1,
                 limit=1
             )
+            # TODO: change datetime back to timestampthis later
             new_data['datetime'] = pd.to_datetime(new_data['timestamp'], unit='s')
             new_data = new_data.sort_values('datetime')
             if not new_data.empty:
@@ -600,9 +658,12 @@ class TradeMonitor:
                 if self.last_update is None or latest_datetime >= self.last_update:
                     existing_mask = self.df['datetime'] == latest_datetime
                     if existing_mask.any():
-                        self.df.loc[existing_mask, ['open', 'high', 'low', 'close', 'volume']] = new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0]
+                        # make sure it is an assigment of series to series (else the assignment will fail)
+                        self.df.loc[existing_mask, ['open', 'high', 'low', 'close', 'volume']].iloc[0] = new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0]
                     else:
                         self.df = pd.concat([self.df, new_data])
+                        print("new data: ", new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0])
+                        print("Latest row after concat: ", self.df[['open', 'high', 'low', 'close', 'volume']].iloc[-1])
                     self.df = self.df.sort_values('datetime').tail(100)
                     self.last_update = latest_datetime
                     return new_data
@@ -620,7 +681,30 @@ class TradeMonitor:
         }
         buy_cols, sell_cols = self._calculate_signals()
         trade = self._check_signals(self.df.iloc[-1])
+        
+        # check if there is any null values in the dataframe for buy_signal and sell_signal
+        if self.df['buy_signal'].isnull().any():
+            print(f"❌ [ERROR] There are null values in the dataframe for buy_signal")
+            # show the indices of the rows with null values
+            print(self.df[self.df['buy_signal'].isnull()].index)
+        if self.df['sell_signal'].isnull().any():
+            print(f"❌ [ERROR] There are null values in the dataframe for sell_signal")
+            # show the indices of the rows with null values
+            print(self.df[self.df['sell_signal'].isnull()].index)
+        print("before calculate_trading_stats in process_new_data")
+        
         stats = calculate_trading_stats(self.df, buy_cols, sell_cols)
+        
+        # check if there is any null values in the dataframe for buy_signal and sell_signal
+        if self.df['buy_signal'].isnull().any():
+            print(f"❌ [ERROR] There are null values in the dataframe for buy_signal")
+            # show the indices of the rows with null values
+            print(self.df[self.df['buy_signal'].isnull()].index)
+        if self.df['sell_signal'].isnull().any():
+            print(f"❌ [ERROR] There are null values in the dataframe for sell_signal")
+            # show the indices of the rows with null values
+            print(self.df[self.df['sell_signal'].isnull()].index)
+        
         fig = plot_backtest_results(
             df=self.df,
             buy_indicator_info=self.buy_signal_info,
