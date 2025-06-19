@@ -199,13 +199,14 @@ const LiveTradeResults = ({ onStop, strategy }) => {
     console.log('Strategy ID:', strategy?.strategy_id);
     
     isStoppingManuallyRef.current = true;
+    setIsStopped(true);
     
     if (eventSourceRef.current) {
       console.log('Closing EventSource connection...');
       eventSourceRef.current.close();
       console.log('EventSource readyState after close:', eventSourceRef.current.readyState);
     }
-    
+     
     if (strategy?.strategy_id) {
       try {
         console.log('Calling backend stop endpoint...');
