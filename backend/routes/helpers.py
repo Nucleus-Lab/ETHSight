@@ -302,68 +302,14 @@ class TradeMonitor:
         self.df = df.sort_values('datetime')
         self.last_update = self.df['datetime'].max()
         sort_end = time.time()
-        print(f"⏱️ [TIMING] Data sorting: {sort_end - sort_start:.3f} seconds")
-                
+        print(f"⏱️ [TIMING] Data sorting: {sort_end - sort_start:.3f} seconds")      
         print("✅ Done initializing dataframe")
-        
-        # Calculate initial signals for plotting context (but no trading signals yet)
-        # yield {
-        #     'status': 'initializing',
-        #     'message': 'Calculating initial indicators for chart...',
-        #     'progress': 75
-        # }
-        
-        # initial_signals_start = time.time()
-        # self._calculate_initial_indicators()
-        # initial_signals_end = time.time()
-        # print(f"⏱️ [TIMING] Initial indicators calculation: {initial_signals_end - initial_signals_start:.3f} seconds")
         
         yield {
             'status': 'initializing',
             'message': 'Setup complete, ready for live trading...',
             'progress': 90
         }
-    
-    def _calculate_initial_indicators(self):
-        """Calculate indicators for the initial dataframe (for plotting only, no trading signals)"""
-        if self.df.empty:
-            return
-        
-        # # Calculate buy signal indicators for plotting
-        # self.df, buy_signal_column = apply_signal_calculation_code(
-        #     self.df, 
-        #     self.buy_signal_code,
-        #     self.buy_signal_info['name']
-        # )
-        
-        # # Calculate sell signal indicators for plotting  
-        # self.df, sell_signal_column = apply_signal_calculation_code(
-        #     self.df,
-        #     self.sell_signal_code,
-        #     self.sell_signal_info['name']
-        # )
-        
-        
-        # TODO:
-        # Initialize trading signal columns (but don't set any signals for historical data)
-        # self.df['buy_signal'] = 0
-        # self.df['sell_signal'] = 0
-        
-        # Store column names for later use
-        # self.buy_signal_info['column'] = buy_signal_column
-        # self.sell_signal_info['column'] = sell_signal_column
-        
-        # check if there is any null values in the dataframe for buy_signal and sell_signal
-        # if self.df['buy_signal'].isnull().any():
-        #     print(f"❌ [ERROR] There are null values in the dataframe for buy_signal")
-        #     # show the indices of the rows with null values
-        #     print(self.df[self.df['buy_signal'].isnull()].index)
-        # if self.df['sell_signal'].isnull().any():
-        #     print(f"❌ [ERROR] There are null values in the dataframe for sell_signal")
-        #     # show the indices of the rows with null values
-        #     print(self.df[self.df['sell_signal'].isnull()].index)
-        
-        # print(f"✅ Initial indicators calculated: {buy_signal_column}, {sell_signal_column}")
     
     def _calculate_signals(self) -> Tuple[List[str], List[str]]:
         """Calculate indicators for new data and trading signals for latest data only"""
