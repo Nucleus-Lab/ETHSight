@@ -5,6 +5,7 @@ import traceback
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import asyncio
 from typing import Dict, List, Optional, Tuple, AsyncGenerator
 
@@ -206,6 +207,26 @@ def prepare_signal_with_condition(df, signal_id: int, operator: str, threshold: 
     
     return df_with_signal, signal_column
 
+
+def convert_timestamp_to_timezone(df, column: str, from_tz: str = 'UTC', to_tz: str = 'Asia/Shanghai') -> pd.DataFrame:
+    """
+    Convert a timezone-naive datetime column from one timezone to another.
+
+    Parameters:
+        df (pd.DataFrame): The input DataFrame.
+        column (str): Name of the datetime column to convert.
+        from_tz (str): Source timezone (default: 'UTC').
+        to_tz (str): Target timezone (default: 'Asia/Shanghai').
+
+    Returns:
+        pd.DataFrame: The DataFrame with the converted datetime column.
+    """
+    if not pd.api.types.is_datetime64_any_dtype(df[column]):
+        raise ValueError(f"Column '{column}' must be of datetime dtype")
+
+    df[column] = df[column].dt.tz_localize(from_tz).dt.tz_convert(to_tz)
+    return df
+
 class TradeMonitor:
     def __init__(self, 
                  db: Session,
@@ -266,7 +287,7 @@ class TradeMonitor:
             'name': get_signal_by_id(db, sell_signal_id).signal_name,
             'new_columns': []  # Will be populated when signals are calculated
         }
-    
+        
     async def initialize_dataframe_async(self) -> AsyncGenerator[Dict, None]:
         """Initialize DataFrame with historical data with progress updates"""
         
@@ -297,6 +318,8 @@ class TradeMonitor:
         
         timestamp_start = time.time()
         df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+        # convert the timestamp to local time # TODO: change the timezone to the user's timezone
+        df = convert_timestamp_to_timezone(df, 'datetime', from_tz='UTC', to_tz='Asia/Shanghai')
         timestamp_end = time.time()
         print(f"⏱️ [TIMING] Timestamp processing: {timestamp_end - timestamp_start:.3f} seconds")
         
@@ -605,8 +628,10 @@ class TradeMonitor:
                 aggregate=1,
                 limit=1
             )
-            # TODO: change datetime back to timestampthis later
+            # TODO: change datetime back to timestamp later
             new_data['datetime'] = pd.to_datetime(new_data['timestamp'], unit='s')
+            # convert the timestamp to local time # TODO: change the timezone to the user's timezone
+            new_data = convert_timestamp_to_timezone(new_data, 'datetime', from_tz='UTC', to_tz='Asia/Shanghai')
             new_data = new_data.sort_values('datetime')
             if not new_data.empty:
                 latest_datetime = new_data['datetime'].iloc[-1]
