@@ -494,7 +494,8 @@ def apply_signal_calculation_code(df: pd.DataFrame, signal_code: str, signal_nam
         print(f"DataFrame shape: {df.shape}")
 
         # Execute the signal calculation code
-        exec(signal_code, globals(), local_vars)
+        # Use local_vars as both global and local namespace so functions can find each other
+        exec(signal_code, local_vars, local_vars)
         
         print(f"After execution, local_vars keys: {list(local_vars.keys())}")
         

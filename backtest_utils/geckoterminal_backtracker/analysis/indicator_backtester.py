@@ -516,15 +516,15 @@ def plot_backtest_results(df, buy_indicator_info, sell_indicator_info, buy_signa
             'signal_type': 'sell'
         })
     
-    # 生成图表标题
-    if not title:
-        if sell_indicator_info:
-            title = f"{buy_indicator_info['name']} (买入) + {sell_indicator_info['name']} (卖出)"
-        else:
-            title = f"{buy_indicator_info['name']}"
+    # # 生成图表标题
+    # if not title:
+    #     if sell_indicator_info:
+    #         title = f"{buy_indicator_info['name']} (买入) + {sell_indicator_info['name']} (卖出)"
+    #     else:
+    #         title = f"{buy_indicator_info['name']}"
             
-        if network and pool:
-            title += f" - {network.upper()} {pool}"
+    #     if network and pool:
+    #         title += f" - {network.upper()} {pool}"
     
     # 绘制图表
     fig = analyzer.plot_with_indicators(

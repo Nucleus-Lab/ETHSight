@@ -284,9 +284,10 @@ import numpy as np
 要求:
 1. 函数应该接受一个 pandas DataFrame 作为输入，该 DataFrame 包含 open, high, low, close, volume, datetime 列
 2. **首先检查 DataFrame 中是否已经存在与所需信号相匹配的列**
-   - 检查是否有列名与 '{signal_name}' 相同或相似
+   - 检查是否有列名'{signal_name}' 的列
    - 检查是否有其他列可以直接用作此信号（例如，如果需要 'volume' 信号，而 DataFrame 中已有 'volume' 列）
-   - 如果找到合适的现有列，直接返回该列名，不要重新计算
+   - 如果找到合适的现有列，检查最新的行是否是空缺值，如果是，那就按照正确的计算方式赋值。
+   - 返回该列名。
 3. 如果没有找到现有的合适列，则计算信号值并添加到 DataFrame 中，列名为 '{signal_name}'
 4. 函数应该返回 (df, signal_column_name) 元组，其中 df 是包含信号列的 DataFrame，signal_column_name 是信号列的名称
 5. 使用 pandas 和 numpy 进行计算

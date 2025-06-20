@@ -119,28 +119,28 @@ def plot_with_indicators(df: pd.DataFrame, indicators: List[str], title: Optiona
     # 4. CONFIGURE CHART TITLE & LAYOUT
     # ============================================================================
     
-    # 设置图表标题
-    if title:
-        chart_title = title
-    else:
-        # 尝试从数据中提取代币信息
-        if 'base_token_symbol' in df.columns and 'quote_token_symbol' in df.columns:
-            base = df['base_token_symbol'].iloc[0] if not pd.isna(df['base_token_symbol'].iloc[0]) else 'Base'
-            quote = df['quote_token_symbol'].iloc[0] if not pd.isna(df['quote_token_symbol'].iloc[0]) else 'Quote'
-            chart_title = f"{base}/{quote} Strategy Analysis"
-        else:
-            chart_title = "Strategy Analysis"
+    # # 设置图表标题
+    # if title:
+    #     chart_title = title
+    # else:
+    #     # 尝试从数据中提取代币信息
+    #     if 'base_token_symbol' in df.columns and 'quote_token_symbol' in df.columns:
+    #         base = df['base_token_symbol'].iloc[0] if not pd.isna(df['base_token_symbol'].iloc[0]) else 'Base'
+    #         quote = df['quote_token_symbol'].iloc[0] if not pd.isna(df['quote_token_symbol'].iloc[0]) else 'Quote'
+    #         chart_title = f"{base}/{quote} Strategy Analysis"
+    #     else:
+    #         chart_title = "Strategy Analysis"
 
     # 配置响应式布局
     fig.update_layout(
-        title={
-            'text': chart_title,
-            'x': 0.5,  # 居中
-            'y': 0.98,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': dict(size=18)
-        },
+        # title={
+        #     'text': chart_title,
+        #     'x': 0.5,  # 居中
+        #     'y': 0.98,
+        #     'xanchor': 'center',
+        #     'yanchor': 'top',
+        #     'font': dict(size=18)
+        # },
         height=None,  # 让前端控制高度
         margin=dict(l=10, r=0, t=80, b=20),  # 增加顶部边距为图例留空间
         paper_bgcolor='rgb(15, 15, 15)',  # 深色背景
