@@ -438,6 +438,7 @@ class TradeMonitor:
         print("Current price: ", current_price)
         
         # Check buy signal
+        # TODO: change the buy condition
         if row['buy_signal'] == 1 and self.current_position == 0:
             # Execute swap
             result = swap_tokens(self.position_size, WBNB, CAKE)
@@ -615,9 +616,11 @@ class TradeMonitor:
                         # make sure it is an assigment of series to series (else the assignment will fail)
                         self.df.loc[existing_mask, ['open', 'high', 'low', 'close', 'volume']].iloc[0] = new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0]
                     else:
-                        self.df = pd.concat([self.df, new_data])
+                        # remember to ignore_index=True to reset the index
+                        self.df = pd.concat([self.df, new_data], ignore_index=True)
+                        # print the null values in the dataframe
                         print("new data: ", new_data[['open', 'high', 'low', 'close', 'volume']].iloc[0])
-                        print("Latest row after concat: ", self.df[['open', 'high', 'low', 'close', 'volume']].iloc[-1])
+                        print("Latest row after concat: ", self.df.iloc[-1])
                     self.df = self.df.sort_values('datetime').tail(100)
                     self.last_update = latest_datetime
                     return new_data
